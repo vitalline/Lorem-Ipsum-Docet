@@ -3,7 +3,6 @@ package sys.vitae.lorem.listeners;
 import java.util.List;
 import java.util.Objects;
 
-import org.bukkit.ChatColor;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -14,20 +13,21 @@ import org.bukkit.inventory.meta.Repairable;
 import org.bukkit.inventory.view.AnvilView;
 import org.bukkit.plugin.Plugin;
 
+import net.kyori.adventure.text.Component;
 import sys.vitae.lorem.utils.FormatCodes;
 import sys.vitae.lorem.utils.LoreTemplates;
 
 /**
- * Anvil handling. The anvil re-computes its output (and fires {@link PrepareAnvilEvent})
- * every time the rename text changes, so the output slot updates in real time.
+ * Anvil handling.
+ * The anvil re-computes its output (and fires {@link PrepareAnvilEvent}) every time the rename text changes,
+ * so the output slot updates in real time.
  *
  * <p><b>Renaming:</b> escape sequences in the rename text are translated (see {@link FormatCodes}).
- * A rename consisting solely of formatting codes replaces the leading formatting codes of the item's
- * existing custom name. Items without a custom name aren't renamed at all in that case(the default name
- * can't be expressed as a legacy string), just like renaming an item to its current name in vanilla.
+ * A rename consisting solely of formatting codes replaces the leading formatting codes of the item's existing custom name.
+ * Items without a custom name aren't renamed at all in that case, just like renaming an item to its current name in vanilla.
  *
- * <p><b>Lore:</b> a lore template in the second slot copies its lore onto the item; a blank sheet clears
- * the item's lore. Either can be combined with renaming, and uses up one sheet. It's priced like a rename.
+ * <p><b>Lore:</b> a lore template in the second slot copies its lore onto the item; a blank sheet clears the item's lore.
+ * Either can be combined with renaming, and uses up one sheet. It's priced like a rename.
  */
 public class AnvilListener implements Listener {
 
@@ -57,22 +57,21 @@ public class AnvilListener implements Listener {
     private static void translateRename(PrepareAnvilEvent event, ItemStack input) {
         ItemStack result = event.getResult();
         String renameText = event.getView().getRenameText();
-        if (result == null || result.getType().isAir() || !FormatCodes.containsEscape(renameText)
+        if (result == null || result.getType().isAir() || !FormatCodes.hasEscapes(renameText)
                 || !isRenamedTo(result, input, renameText)) {
             return;
         }
 
-        ItemMeta inputMeta = input.getItemMeta();
-        String oldName = inputMeta != null && inputMeta.hasDisplayName() ? inputMeta.getDisplayName() : null;
-        String name = translateName(renameText, oldName);
-        if (Objects.equals(name, oldName)) {
+        Component oldName = customName(input);
+        Component name = translateName(renameText, oldName);
+        if (FormatCodes.sameText(name, oldName)) {
             cancelRename(event, result, input);
             return;
         }
 
         ItemStack out = result.clone();
         ItemMeta meta = out.getItemMeta();
-        meta.setDisplayName(name);
+        meta.customName(name);
         out.setItemMeta(meta);
         event.setResult(out);
     }
@@ -83,31 +82,30 @@ public class AnvilListener implements Listener {
         if (meta == null) {
             return;
         }
-        List<String> lore = LoreTemplates.isTemplate(sheet) ? sheet.getItemMeta().getLore() : null;
-        if (Objects.equals(meta.hasLore() ? meta.getLore() : null, lore)) {
+        List<Component> lore = LoreTemplates.isTemplate(sheet) ? sheet.getItemMeta().lore() : null;
+        if (Objects.equals(meta.hasLore() ? meta.lore() : null, lore)) {
             return; // nothing to apply; leave vanilla's empty output
         }
 
         AnvilView view = event.getView();
-        String oldName = meta.hasDisplayName() ? meta.getDisplayName() : null;
-        String name = resolveName(view.getRenameText(), oldName);
-        boolean renamed = !Objects.equals(name, oldName);
+        Component oldName = meta.hasCustomName() ? meta.customName() : null;
+        Component name = resolveName(view.getRenameText(), oldName);
+        boolean renamed = !FormatCodes.sameText(name, oldName);
         if (renamed) {
-            meta.setDisplayName(name);
+            meta.customName(name);
         }
-        meta.setLore(lore);
+        meta.lore(lore);
         ItemStack out = input.clone();
         out.setItemMeta(meta);
 
-        // Like a rename: 1 level per change on top of the prior-work penalty, which isn't increased,
-        // and never "Too Expensive!".
+        // Like a rename: 1 level per change on top of the prior-work penalty, which isn't increased, and never "Too Expensive!".
         int cost = Math.max(1, Math.min(priorWork(input) + priorWork(sheet) + 1 + (renamed ? 1 : 0),
                 view.getMaximumRepairCost() - 1));
         event.setResult(out);
         view.setRepairCost(cost);
         view.setRepairItemCountCost(1);
-        // For an ingredient it doesn't accept, CraftBukkit marks the output as denied
-        // (cost -1, so it can't be taken) right after this event; re-apply the price once that's done.
+        // For an ingredient it doesn't accept, the server marks the output as denied (cost -1, so it can't be taken)
+        // right after this event; re-apply the price once that's done.
         plugin.getServer().getScheduler().runTask(plugin, () -> {
             if (out.equals(view.getTopInventory().getItem(RESULT_SLOT))) {
                 view.setRepairCost(cost);
@@ -117,38 +115,38 @@ public class AnvilListener implements Listener {
     }
 
     /** The custom name vanilla's rename rules give the output (null for none), with escapes translated. */
-    private static String resolveName(String renameText, String oldName) {
+    private static Component resolveName(String renameText, Component oldName) {
         if (renameText == null || renameText.isBlank()) {
             return null;
         }
         // The rename field shows the current name without formatting; leaving it as-is keeps the name.
-        if (oldName != null && renameText.equals(ChatColor.stripColor(oldName))) {
+        if (oldName != null && renameText.equals(FormatCodes.plainText(oldName))) {
             return oldName;
         }
-        return FormatCodes.containsEscape(renameText) ? translateName(renameText, oldName) : renameText;
+        return FormatCodes.hasEscapes(renameText) ? translateName(renameText, oldName) : Component.text(renameText);
     }
 
     /** Translates the rename text; returns {@code oldName} if that wouldn't rename the item. */
-    private static String translateName(String renameText, String oldName) {
-        String name = FormatCodes.translate(renameText);
-        if (FormatCodes.isOnlyFormatting(name)) {
-            return oldName == null ? null : name + FormatCodes.stripLeadingCodes(oldName);
+    private static Component translateName(String renameText, Component oldName) {
+        if (!FormatCodes.isOnlyFormatting(renameText)) {
+            return FormatCodes.toComponent(renameText);
         }
-        return name;
+        String oldText = oldName == null ? null : FormatCodes.toBuffer(oldName, FormatCodes.NAME_DEFAULTS);
+        if (oldText == null) {
+            return oldName; // no custom name, or one that can't be restyled with codes
+        }
+        return FormatCodes.toComponent(renameText + FormatCodes.stripLeadingCodes(oldText));
     }
 
     /**
-     * Vanilla only renames when the text differs from the item's current name; in that case
-     * the output's custom name is exactly the literal rename text. Guards against re-translating
-     * an untouched name that merely contains a literal {@code \} (e.g. while repairing such an item).
+     * Vanilla only renames when the text differs from the item's current name; in that case the output's custom name
+     * is exactly the literal rename text. Guards against re-translating an untouched name that merely contains a
+     * literal {@code \} (e.g. while repairing such an item).
      */
     private static boolean isRenamedTo(ItemStack result, ItemStack input, String renameText) {
-        ItemMeta resultMeta = result.getItemMeta();
-        if (resultMeta == null || !resultMeta.hasDisplayName() || !resultMeta.getDisplayName().equals(renameText)) {
-            return false;
-        }
-        ItemMeta inputMeta = input.getItemMeta();
-        return inputMeta == null || !inputMeta.hasDisplayName() || !inputMeta.getDisplayName().equals(renameText);
+        Component resultName = customName(result);
+        return resultName != null && FormatCodes.plainText(resultName).equals(renameText)
+                && !resultName.equals(customName(input));
     }
 
     /**
@@ -158,8 +156,7 @@ public class AnvilListener implements Listener {
     private static void cancelRename(PrepareAnvilEvent event, ItemStack result, ItemStack input) {
         ItemStack out = result.clone();
         ItemMeta meta = out.getItemMeta();
-        ItemMeta inputMeta = input.getItemMeta();
-        meta.setDisplayName(inputMeta != null && inputMeta.hasDisplayName() ? inputMeta.getDisplayName() : null);
+        meta.customName(customName(input));
         out.setItemMeta(meta);
 
         if (isUnchanged(out, input)) {
@@ -180,6 +177,11 @@ public class AnvilListener implements Listener {
             normalized.setItemMeta(repairable);
         }
         return normalized.isSimilar(input);
+    }
+
+    private static Component customName(ItemStack item) {
+        ItemMeta meta = item.getItemMeta();
+        return meta != null && meta.hasCustomName() ? meta.customName() : null;
     }
 
     private static int priorWork(ItemStack item) {

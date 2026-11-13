@@ -21,6 +21,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 
+import net.kyori.adventure.text.Component;
 import sys.vitae.lorem.utils.LoreTemplates;
 
 /**
@@ -180,10 +181,10 @@ public class LoreCraftListener implements Listener {
         if (!anyRenamed) {
             return null; // plain paper only: leave it to vanilla
         }
-        List<String> lore = new ArrayList<>();
+        List<Component> lore = new ArrayList<>();
         for (int index : used) {
             ItemMeta meta = matrix[index].getItemMeta();
-            lore.add(meta.hasDisplayName() ? meta.getDisplayName() : "");
+            lore.add(meta.hasCustomName() ? meta.customName() : Component.empty());
         }
         return new Plan(LoreTemplates.create(lore), used);
     }
