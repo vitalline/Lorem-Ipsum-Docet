@@ -42,8 +42,13 @@
             </resource>
         </resources>
         <plugins>
-
-
+            <plugin>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.5.1</version>
+                <configuration>
+                    <outputDirectory>${project.basedir}/plugins</outputDirectory>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 </project>
