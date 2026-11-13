@@ -1,6 +1,6 @@
 main: sys.vitae.lorem.LoremIpsumPlugin
 version: 0.0.1-SNAPSHOT
-name: Lorem Ipsum Docet
+name: LoremIpsumDocet
 author: vitae.sys
 description: Add lore to your favorite items!
 api-version: 1.21
