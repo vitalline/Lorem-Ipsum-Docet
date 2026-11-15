@@ -1,0 +1,121 @@
+package sys.vitae.lorem.listeners;
+
+import static org.mockito.Mockito.*;
+import static sys.vitae.lorem.NonNullMockito.mock;
+import static sys.vitae.lorem.NonNullMockito.verify;
+
+import org.bukkit.GameMode;
+import org.bukkit.Server;
+import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.inventory.AnvilInventory;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.view.AnvilView;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.scheduler.BukkitScheduler;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import sys.vitae.lorem.utils.FormatCodes;
+import sys.vitae.lorem.utils.Templates;
+import sys.vitae.lorem.utils.Templates.Kind;
+import sys.vitae.lorem.utils.Templates.Type;
+
+class AnvilListenerTest {
+
+    private AnvilListener listener;
+    private Templates templates;
+    private PrepareAnvilEvent event;
+    private AnvilView view;
+    private Player player;
+    private ItemStack input;
+    private ItemMeta inputMeta;
+    private ItemStack addition;
+
+    @BeforeEach
+    void setUp() {
+        Plugin plugin = mock(Plugin.class);
+        Server server = mock(Server.class);
+        when(plugin.getServer()).thenReturn(server);
+        when(server.getScheduler()).thenReturn(mock(BukkitScheduler.class));
+        templates = mock(Templates.class);
+        listener = new AnvilListener(plugin, templates);
+        event = mock(PrepareAnvilEvent.class);
+        view = mock(AnvilView.class);
+        player = mock(Player.class);
+        AnvilInventory inventory = mock(AnvilInventory.class);
+        input = mock(ItemStack.class);
+        inputMeta = mock(ItemMeta.class);
+        addition = mock(ItemStack.class);
+        when(input.getItemMeta()).thenReturn(inputMeta);
+        when(addition.getItemMeta()).thenReturn(mock(ItemMeta.class));
+        when(event.getInventory()).thenReturn(inventory);
+        when(event.getView()).thenReturn(view);
+        when(view.getPlayer()).thenReturn(player);
+        when(view.getMaximumRepairCost()).thenReturn(40);
+        when(inventory.getItem(0)).thenReturn(input);
+        when(inventory.getItem(1)).thenReturn(addition);
+        when(player.getGameMode()).thenReturn(GameMode.SURVIVAL);
+    }
+
+    @Test
+    void ordinarySurvivalKeepsLiteralEscapesButCreativeTranslatesThem() {
+        listener.onPrepareAnvil(event);
+        verify(event, never()).getResult();
+
+        when(player.getGameMode()).thenReturn(GameMode.CREATIVE);
+        when(view.getRenameText()).thenReturn("\\cRed");
+        ItemStack vanilla = mock(ItemStack.class), translated = mock(ItemStack.class);
+        ItemMeta vanillaMeta = mock(ItemMeta.class), translatedMeta = mock(ItemMeta.class);
+        when(event.getResult()).thenReturn(vanilla);
+        when(vanilla.getItemMeta()).thenReturn(vanillaMeta);
+        when(vanillaMeta.hasCustomName()).thenReturn(true);
+        when(vanillaMeta.customName()).thenReturn(Component.text("\\cRed"));
+        when(vanilla.clone()).thenReturn(translated);
+        when(translated.getItemMeta()).thenReturn(translatedMeta);
+
+        listener.onPrepareAnvil(event);
+        verify(translatedMeta).customName(FormatCodes.toComponent("\\cRed"));
+        verify(event).setResult(translated);
+    }
+
+    @Test
+    void nameTemplateTakesPrecedenceOverTheRenameField() {
+        ItemStack result = mock(ItemStack.class);
+        when(templates.kind(addition)).thenReturn(new Kind(Type.NAME, false));
+        when(templates.apply(input, addition)).thenReturn(result);
+        when(view.getRenameText()).thenReturn("not the template name");
+
+        listener.onPrepareAnvil(event);
+        verify(event).setResult(result);
+        verify(result, never()).getItemMeta();
+        verify(view).setRepairCost(1);
+        verify(view).setRepairItemCountCost(1);
+    }
+
+    @Test
+    void otherTemplatesPreserveAnUntouchedFormattedName() {
+        ItemStack result = mock(ItemStack.class);
+        when(templates.kind(addition)).thenReturn(new Kind(Type.GLINT, false));
+        when(templates.apply(input, addition)).thenReturn(result);
+        when(inputMeta.hasCustomName()).thenReturn(true);
+        when(inputMeta.customName()).thenReturn(Component.text("Old", NamedTextColor.RED));
+        when(view.getRenameText()).thenReturn("Old");
+
+        listener.onPrepareAnvil(event);
+        verify(event).setResult(result);
+        verify(result, never()).getItemMeta();
+        verify(view).setRepairCost(1);
+    }
+
+    @Test
+    void colorTemplateCannotBeConsumedForARenameOnAnIncompatibleItem() {
+        when(templates.kind(addition)).thenReturn(new Kind(Type.COLOR, false));
+        when(view.getRenameText()).thenReturn("New");
+        listener.onPrepareAnvil(event);
+        verify(event, never()).setResult(any());
+    }
+}

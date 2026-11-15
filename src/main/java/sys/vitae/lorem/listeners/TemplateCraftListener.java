@@ -2,7 +2,9 @@ package sys.vitae.lorem.listeners;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
+import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Item;
@@ -22,34 +24,33 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 
 import net.kyori.adventure.text.Component;
-import sys.vitae.lorem.utils.LoreTemplates;
+import net.kyori.adventure.text.format.TextColor;
+import sys.vitae.lorem.utils.ColorRecipe;
+import sys.vitae.lorem.utils.ItemConsumption;
+import sys.vitae.lorem.utils.Templates;
+import sys.vitae.lorem.utils.Templates.Kind;
+import sys.vitae.lorem.utils.Templates.Type;
+import sys.vitae.lorem.utils.TextStyles;
 
 /**
- * Lore templates in the crafting grid (see {@link LoreTemplates} for the kinds of sheets):
- *
- * <ul>
- *   <li><b>Compose:</b> sheets only, at least one renamed, no template -> a new lore template
- *       whose lore is the sheets' names in reading order (blank sheets give blank lines).</li>
- *   <li><b>Copy:</b> one template plus any number of other sheets (renamed ones count as blank) ->
- *       that many copies of the template, the original included. Two or more templates don't combine.</li>
- *   <li><b>Revert:</b> one template plus a white dye -> a plain sheet of paper.</li>
- * </ul>
- *
- * There is no registered recipe behind this, so taking the result is handled manually: vanilla's
+ * Template composition, copying, styling and resets in either crafting grid.
+ * There is no registered recipe behind these, so taking the result is handled manually: vanilla's
  * no-recipe path would hand back the ingredients instead of consuming them.
  */
-public class LoreCraftListener implements Listener {
+public class TemplateCraftListener implements Listener {
 
     private static final int MAX_BULK_CRAFTS = 128;
 
     private final Plugin plugin;
+    private final Templates templates;
 
-    public LoreCraftListener(Plugin plugin) {
+    public TemplateCraftListener(Plugin plugin, Templates templates) {
         this.plugin = plugin;
+        this.templates = templates;
     }
 
     /** The outcome of the current grid: the result item and the matrix indices to consume one item from. */
-    private record Plan(ItemStack result, List<Integer> consumed) {}
+    record Plan(ItemStack result, List<Integer> consumed) {}
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onPrepareCraft(PrepareItemCraftEvent event) {
@@ -93,11 +94,11 @@ public class LoreCraftListener implements Listener {
                 ItemStack cursor = view.getCursor();
                 if (isEmpty(cursor)) {
                     view.setCursor(result.clone());
-                    consume(inventory, plan);
+                    consume(inventory, plan, player);
                 } else if (canStack(cursor, result)) {
                     cursor.setAmount(cursor.getAmount() + result.getAmount());
                     view.setCursor(cursor);
-                    consume(inventory, plan);
+                    consume(inventory, plan, player);
                 }
             }
             case NUMBER_KEY -> {
@@ -105,11 +106,11 @@ public class LoreCraftListener implements Listener {
                 ItemStack target = player.getInventory().getItem(slot);
                 if (isEmpty(target)) {
                     player.getInventory().setItem(slot, result.clone());
-                    consume(inventory, plan);
+                    consume(inventory, plan, player);
                 } else if (canStack(target, result)) {
                     target.setAmount(target.getAmount() + result.getAmount());
                     player.getInventory().setItem(slot, target);
-                    consume(inventory, plan);
+                    consume(inventory, plan, player);
                 }
             }
             case SHIFT_LEFT, SHIFT_RIGHT -> {
@@ -118,18 +119,18 @@ public class LoreCraftListener implements Listener {
                         break;
                     }
                     player.getInventory().addItem(plan.result().clone());
-                    consume(inventory, plan);
+                    consume(inventory, plan, player);
                     plan = plan(inventory.getMatrix());
                 }
             }
             case DROP -> {
                 drop(player, result);
-                consume(inventory, plan);
+                consume(inventory, plan, player);
             }
             case CONTROL_DROP -> {
                 for (int i = 0; i < MAX_BULK_CRAFTS && plan != null && plan.result().isSimilar(result); i++) {
                     drop(player, plan.result());
-                    consume(inventory, plan);
+                    consume(inventory, plan, player);
                     plan = plan(inventory.getMatrix());
                 }
             }
@@ -140,65 +141,121 @@ public class LoreCraftListener implements Listener {
         plugin.getServer().getScheduler().runTask(plugin, player::updateInventory);
     }
 
-    private static Plan plan(ItemStack[] matrix) {
+    Plan plan(ItemStack[] matrix) {
         List<Integer> used = new ArrayList<>();
-        int template = -1;
-        int sheets = 0;
-        boolean dye = false;
-        boolean anyRenamed = false;
+        List<ItemStack> marked = new ArrayList<>();
+        List<ItemStack> sheets = new ArrayList<>();
+        List<ItemStack> ingredients = new ArrayList<>();
         for (int i = 0; i < matrix.length; i++) {
             ItemStack item = matrix[i];
             if (isEmpty(item)) {
                 continue;
             }
             used.add(i);
-            if (LoreTemplates.isTemplate(item)) {
-                if (template >= 0) {
-                    return null; // templates can't be copied onto each other
-                }
-                template = i;
-            } else if (LoreTemplates.isSheet(item)) {
-                sheets++;
-                anyRenamed |= LoreTemplates.isRenamedSheet(item);
-            } else if (item.getType() == Material.WHITE_DYE && !dye) {
-                dye = true;
+            if (templates.kind(item) != null) {
+                marked.add(item);
+            } else if (templates.isSheet(item)) {
+                sheets.add(item);
             } else {
-                return null;
+                ingredients.add(item);
             }
         }
 
-        if (dye) {
-            return template >= 0 && sheets == 0 ? new Plan(new ItemStack(Material.PAPER), used) : null;
-        }
-        if (template >= 0) {
-            if (sheets == 0) {
-                return null;
-            }
-            ItemStack copies = matrix[template].clone();
-            copies.setAmount(sheets + 1);
+        if (marked.size() == 1 && !sheets.isEmpty() && ingredients.isEmpty()) {
+            ItemStack copies = marked.getFirst().clone();
+            copies.setAmount(sheets.size() + 1);
             return new Plan(copies, used);
         }
-        if (!anyRenamed) {
-            return null; // plain paper only: leave it to vanilla
+        if (marked.size() == 2 && sheets.isEmpty() && ingredients.isEmpty()) {
+            ItemStack text = null, color = null;
+            for (ItemStack item : marked) {
+                Kind kind = Objects.requireNonNull(templates.kind(item));
+                if (!kind.reset() && kind.type().hasText()) {
+                    text = item;
+                } else if (!kind.reset() && kind.type() == Type.COLOR) {
+                    color = item;
+                }
+            }
+            return text != null && color != null ? new Plan(templates.withText(text,
+                    TextStyles.color(templates.text(text), TextColor.color(templates.colorRecipe(color).apply(null).asRGB()))),
+                    used) : null;
         }
-        List<Component> lore = new ArrayList<>();
-        for (int index : used) {
-            ItemMeta meta = matrix[index].getItemMeta();
-            lore.add(meta.hasCustomName() ? meta.customName() : Component.empty());
+        if (marked.size() == 1 && sheets.isEmpty() && !ingredients.isEmpty()) {
+            ItemStack template = marked.getFirst();
+            Kind kind = Objects.requireNonNull(templates.kind(template));
+            if (!kind.reset() && ingredients.size() == 1 && ingredients.getFirst().getType() == Material.BONE_MEAL) {
+                return new Plan(templates.create(new Kind(kind.type(), true)), used);
+            }
+            if (kind.reset()) {
+                return null;
+            }
+            List<Color> dyes = dyes(ingredients);
+            if (kind.type() == Type.COLOR && dyes != null) {
+                return new Plan(templates.createColor(templates.colorRecipe(template).append(dyes)), used);
+            }
+            if (kind.type().hasText()) {
+                List<? extends Component> text = templates.text(template);
+                if (dyes != null) {
+                    text = TextStyles.color(text, TextColor.color(new ColorRecipe(List.of(dyes)).apply(null).asRGB()));
+                } else if (ingredients.size() == 1 && TextStyles.isIngredient(ingredients.getFirst())) {
+                    text = TextStyles.apply(text, ingredients.getFirst(), true);
+                } else {
+                    return null;
+                }
+                return new Plan(templates.withText(template, text), used);
+            }
+            return null;
         }
-        return new Plan(LoreTemplates.create(lore), used);
+        if (!marked.isEmpty() || sheets.isEmpty()) {
+            return null;
+        }
+        if (ingredients.isEmpty()) {
+            if (sheets.stream().noneMatch(templates::isRenamedSheet)) {
+                return null;
+            }
+            List<Component> lore = new ArrayList<>();
+            for (ItemStack sheet : sheets) {
+                ItemMeta meta = sheet.getItemMeta();
+                lore.add(meta.hasCustomName() ? meta.customName() : Component.empty());
+            }
+            return new Plan(templates.create(Type.LORE, lore), used);
+        }
+        if (sheets.size() != 1 || !templates.isBlankSheet(sheets.getFirst())) {
+            return null;
+        }
+        if (ingredients.size() == 1) {
+            ItemStack ingredient = ingredients.getFirst();
+            if (ingredient.getType() == Material.NAME_TAG && ingredient.getItemMeta().hasCustomName()) {
+                return new Plan(templates.create(Type.NAME, List.of(ingredient.getItemMeta().customName())), used);
+            }
+            if (ingredient.getType() == Material.GLOWSTONE_DUST) {
+                return new Plan(templates.create(new Kind(Type.GLINT, false)), used);
+            }
+        }
+        List<Color> dyes = dyes(ingredients);
+        return dyes == null ? null : new Plan(templates.createColor(new ColorRecipe(List.of(dyes))), used);
     }
 
-    private static void consume(CraftingInventory inventory, Plan plan) {
+    private static List<Color> dyes(List<ItemStack> ingredients) {
+        List<Color> colors = new ArrayList<>();
+        for (ItemStack ingredient : ingredients) {
+            var dye = TextStyles.dye(ingredient.getType());
+            if (dye == null) {
+                return null;
+            }
+            colors.add(dye.getColor());
+        }
+        return colors.isEmpty() ? null : colors;
+    }
+
+    private static void consume(CraftingInventory inventory, Plan plan, Player player) {
         ItemStack[] matrix = inventory.getMatrix();
         for (int index : plan.consumed()) {
             ItemStack item = matrix[index];
-            if (isEmpty(item) || item.getAmount() <= 1) {
+            if (isEmpty(item)) {
                 matrix[index] = null;
             } else {
-                item = item.clone();
-                item.setAmount(item.getAmount() - 1);
-                matrix[index] = item;
+                matrix[index] = ItemConsumption.consumeOne(item, player);
             }
         }
         inventory.setMatrix(matrix); // triggers PrepareItemCraftEvent, refreshing the result slot
@@ -232,6 +289,6 @@ public class LoreCraftListener implements Listener {
     }
 
     private static boolean isEmpty(ItemStack item) {
-        return item == null || item.getType().isAir() || item.getAmount() <= 0;
+        return item == null || item.isEmpty();
     }
 }

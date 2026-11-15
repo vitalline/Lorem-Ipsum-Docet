@@ -9,6 +9,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
@@ -123,7 +124,7 @@ public final class FormatCodes {
     }
 
     /** True if the text contains any escape sequence (including {@code \\}). */
-    public static boolean hasEscapes(String text) {
+    public static boolean hasEscapes(@Nullable String text) {
         if (text == null) {
             return false;
         }
@@ -136,9 +137,9 @@ public final class FormatCodes {
     }
 
     /** Parses escaped text into a component. Text without escapes becomes a plain, unstyled text component. */
-    public static Component toComponent(String text) {
+    public static @NonNull Component toComponent(String text) {
         State state = State.INITIAL;
-        List<Component> parts = new ArrayList<>();
+        List<@NonNull Component> parts = new ArrayList<>();
         for (Object piece : tokenize(text)) {
             if (piece instanceof Code code) {
                 state = state.apply(code);
@@ -148,7 +149,7 @@ public final class FormatCodes {
         }
         return switch (parts.size()) {
             case 0 -> Component.empty();
-            case 1 -> parts.getFirst();
+            case 1 -> Objects.requireNonNull(parts.getFirst());
             default -> Component.text().append(parts).build();
         };
     }
@@ -170,7 +171,7 @@ public final class FormatCodes {
      * @return the escaped text, or null if the component can't be expressed with escapes
      *         (e.g. it has click events, translatable parts or a custom font)
      */
-    public static String toBuffer(Component component, Set<@NonNull TextDecoration> defaults) {
+    public static @Nullable String toBuffer(Component component, Set<@NonNull TextDecoration> defaults) {
         List<Run> runs = new ArrayList<>();
         if (!flatten(component, Style.empty(), runs)) {
             return null;
@@ -203,11 +204,11 @@ public final class FormatCodes {
     }
 
     /** True if both are absent, or both are present and look the same. */
-    public static boolean sameText(Component a, Component b) {
+    public static boolean sameText(@Nullable Component a, @Nullable Component b) {
         return a == null ? b == null : b != null && a.compact().equals(b.compact());
     }
 
-    public static String plainText(Component component) {
+    public static @NonNull String plainText(Component component) {
         return PlainTextComponentSerializer.plainText().serialize(Objects.requireNonNull(component));
     }
 

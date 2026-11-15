@@ -1,8 +1,6 @@
 package sys.vitae.lorem.listeners;
 
-import java.util.List;
-import java.util.Objects;
-
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -15,7 +13,10 @@ import org.bukkit.plugin.Plugin;
 
 import net.kyori.adventure.text.Component;
 import sys.vitae.lorem.utils.FormatCodes;
-import sys.vitae.lorem.utils.LoreTemplates;
+import sys.vitae.lorem.utils.FormattingAccess;
+import sys.vitae.lorem.utils.Templates;
+import sys.vitae.lorem.utils.Templates.Kind;
+import sys.vitae.lorem.utils.Templates.Type;
 
 /**
  * Anvil handling.
@@ -26,29 +27,33 @@ import sys.vitae.lorem.utils.LoreTemplates;
  * A rename consisting solely of formatting codes replaces the leading formatting codes of the item's existing custom name.
  * Items without a custom name aren't renamed at all in that case, just like renaming an item to its current name in vanilla.
  *
- * <p><b>Lore:</b> a lore template in the second slot copies its lore onto the item; a blank sheet clears the item's lore.
- * Either can be combined with renaming, and uses up one sheet. It's priced like a rename.
+ * <p>Typed templates in the second slot apply just their property, consuming one sheet.
+ * Other than a Name template, these can be combined with renaming. They are priced like a rename.
  */
 public class AnvilListener implements Listener {
 
     private static final int RESULT_SLOT = 2;
 
     private final Plugin plugin;
+    private final Templates templates;
 
-    public AnvilListener(Plugin plugin) {
+    public AnvilListener(Plugin plugin, Templates templates) {
         this.plugin = plugin;
+        this.templates = templates;
     }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onPrepareAnvil(PrepareAnvilEvent event) {
         ItemStack input = event.getInventory().getItem(0);
-        if (input == null || input.getType().isAir()) {
+        if (input == null || input.isEmpty()) {
             return;
         }
         ItemStack addition = event.getInventory().getItem(1);
-        if (LoreTemplates.isTemplate(addition) || LoreTemplates.isBlankSheet(addition)) {
-            applyLore(event, input, addition);
-        } else {
+        boolean formatting = event.getView().getPlayer() instanceof Player player && FormattingAccess.canFormat(player);
+        Kind kind = templates.kind(addition);
+        if (kind != null) {
+            applyTemplate(event, input, addition, kind, formatting);
+        } else if (formatting) {
             translateRename(event, input);
         }
     }
@@ -57,7 +62,7 @@ public class AnvilListener implements Listener {
     private static void translateRename(PrepareAnvilEvent event, ItemStack input) {
         ItemStack result = event.getResult();
         String renameText = event.getView().getRenameText();
-        if (result == null || result.getType().isAir() || !FormatCodes.hasEscapes(renameText)
+        if (result == null || result.isEmpty() || !FormatCodes.hasEscapes(renameText)
                 || !isRenamedTo(result, input, renameText)) {
             return;
         }
@@ -77,26 +82,20 @@ public class AnvilListener implements Listener {
     }
 
     /** Vanilla has no output for these ingredients, so the whole result (and its price) is built here. */
-    private void applyLore(PrepareAnvilEvent event, ItemStack input, ItemStack sheet) {
-        ItemMeta meta = input.getItemMeta();
-        if (meta == null) {
+    private void applyTemplate(PrepareAnvilEvent event, ItemStack input, ItemStack sheet, Kind kind, boolean formatting) {
+        ItemStack out = templates.apply(input, sheet);
+        if (out == null) {
             return;
         }
-        List<Component> lore = LoreTemplates.isTemplate(sheet) ? sheet.getItemMeta().lore() : null;
-        if (Objects.equals(meta.hasLore() ? meta.lore() : null, lore)) {
-            return; // nothing to apply; leave vanilla's empty output
-        }
-
         AnvilView view = event.getView();
-        Component oldName = meta.hasCustomName() ? meta.customName() : null;
-        Component name = resolveName(view.getRenameText(), oldName);
-        boolean renamed = !FormatCodes.sameText(name, oldName);
+        Component oldName = customName(input);
+        Component name = resolveName(view.getRenameText(), oldName, formatting);
+        boolean renamed = kind.type() != Type.NAME && !FormatCodes.sameText(name, oldName);
         if (renamed) {
+            ItemMeta meta = out.getItemMeta();
             meta.customName(name);
+            out.setItemMeta(meta);
         }
-        meta.lore(lore);
-        ItemStack out = input.clone();
-        out.setItemMeta(meta);
 
         // Like a rename: 1 level per change on top of the prior-work penalty, which isn't increased, and never "Too Expensive!".
         int cost = Math.max(1, Math.min(priorWork(input) + priorWork(sheet) + 1 + (renamed ? 1 : 0),
@@ -115,7 +114,7 @@ public class AnvilListener implements Listener {
     }
 
     /** The custom name vanilla's rename rules give the output (null for none), with escapes translated. */
-    private static Component resolveName(String renameText, Component oldName) {
+    private static Component resolveName(String renameText, Component oldName, boolean formatting) {
         if (renameText == null || renameText.isBlank()) {
             return null;
         }
@@ -123,7 +122,7 @@ public class AnvilListener implements Listener {
         if (oldName != null && renameText.equals(FormatCodes.plainText(oldName))) {
             return oldName;
         }
-        return FormatCodes.hasEscapes(renameText) ? translateName(renameText, oldName) : Component.text(renameText);
+        return formatting && FormatCodes.hasEscapes(renameText) ? translateName(renameText, oldName) : Component.text(renameText);
     }
 
     /** Translates the rename text; returns {@code oldName} if that wouldn't rename the item. */

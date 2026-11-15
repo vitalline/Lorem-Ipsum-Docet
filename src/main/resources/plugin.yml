@@ -1,8 +1,12 @@
 main: sys.vitae.lorem.LoremIpsumPlugin
-version: 0.0.1-SNAPSHOT
+version: 0.1.0-SNAPSHOT
 name: LoremIpsumDocet
 author: vitae.sys
-description: Add lore to your favorite items!
+description: Add flavor to your favorite items!
 api-version: 1.21
+permissions:
+  loremipsum.format:
+    description: Use escape substitutions in item names, signs and books
+    default: false
 
 
