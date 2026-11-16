@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 
 import org.bukkit.Color;
 import org.bukkit.DyeColor;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Server;
@@ -233,6 +234,35 @@ class TemplateCraftListenerTest {
             assertSame(construction.constructed().getFirst(), matrix[1]);
             verify(inventory).setMatrix(matrix);
         }
+    }
+
+    @Test
+    void creativeMiddleClickPicksAFullStackWithoutCrafting() {
+        ItemStack template = template(Type.NAME, false), copies = item(Material.PAPER), stack = item(Material.PAPER);
+        when(template.clone()).thenReturn(copies);
+        when(copies.clone()).thenReturn(stack);
+        when(stack.getMaxStackSize()).thenReturn(64);
+        ItemStack[] matrix = {template, sheet(null)};
+        CraftingInventory inventory = mock(CraftingInventory.class);
+        when(inventory.getMatrix()).thenReturn(matrix);
+        InventoryView view = mock(InventoryView.class);
+        when(view.getTopInventory()).thenReturn(inventory);
+        Player player = mock(Player.class);
+        InventoryClickEvent event = mock(InventoryClickEvent.class);
+        when(event.getView()).thenReturn(view);
+        when(event.getSlotType()).thenReturn(SlotType.RESULT);
+        when(event.getWhoClicked()).thenReturn(player);
+        when(event.getClick()).thenReturn(ClickType.MIDDLE);
+
+        when(player.getGameMode()).thenReturn(GameMode.SURVIVAL);
+        listener.onResultClick(event);
+        verify(view, never()).setCursor(any());
+
+        when(player.getGameMode()).thenReturn(GameMode.CREATIVE);
+        listener.onResultClick(event);
+        verify(stack).setAmount(64);
+        verify(view).setCursor(stack);
+        verify(inventory, never()).setMatrix(any());
     }
 
     private @NonNull ItemStack template(Type type, boolean reset) {

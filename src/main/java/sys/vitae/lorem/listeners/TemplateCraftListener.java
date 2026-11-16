@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 import org.bukkit.Color;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Item;
@@ -133,6 +134,14 @@ public class TemplateCraftListener implements Listener {
                     drop(player, plan.result());
                     consume(inventory, plan, player);
                     plan = plan(inventory.getMatrix());
+                }
+            }
+            case MIDDLE -> {
+                // Creative's pick-a-stack, like vanilla's: a full stack, without crafting.
+                if (player.getGameMode() == GameMode.CREATIVE && isEmpty(view.getCursor())) {
+                    ItemStack stack = result.clone();
+                    stack.setAmount(stack.getMaxStackSize());
+                    view.setCursor(stack);
                 }
             }
             default -> { } // other click types just do nothing
