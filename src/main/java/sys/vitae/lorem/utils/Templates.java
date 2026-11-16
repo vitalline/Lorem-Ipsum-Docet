@@ -15,6 +15,9 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextColor;
 
 public final class Templates {
@@ -42,6 +45,8 @@ public final class Templates {
         }
     }
 
+    /** Custom names are white unless styled; lore defaults to purple. Both are italic unless styled. */
+    private static final @NonNull Style PREVIEW = Style.style(NamedTextColor.WHITE);
     private static final @NonNull PersistentDataType<String, String> STRING_TYPE =
             Objects.requireNonNull(PersistentDataType.STRING);
     private static final @NonNull PersistentDataType<int[], int[]> COLOR_RECIPE_TYPE =
@@ -85,11 +90,7 @@ public final class Templates {
     }
 
     public @NonNull ItemStack create(Type type, List<? extends Component> text) {
-        ItemStack template = create(new Kind(type, false));
-        ItemMeta meta = template.getItemMeta();
-        meta.lore(text);
-        template.setItemMeta(meta);
-        return template;
+        return withText(create(new Kind(type, false)), text);
     }
 
     public @NonNull ItemStack create(Kind kind) {
@@ -133,16 +134,39 @@ public final class Templates {
         if (lines == null || lines.isEmpty()) {
             throw new IllegalArgumentException("Text template is missing its text payload");
         }
-        return Objects.requireNonNull(lines.stream().<@NonNull Component>map(Objects::requireNonNull).toList());
+        List<@NonNull Component> text = Objects.requireNonNull(lines.stream().<@NonNull Component>map(Objects::requireNonNull).toList());
+        return isName(template) ? Objects.requireNonNull(text.stream().map(Templates::unwrapPreview).toList()) : text;
     }
 
     public @NonNull ItemStack withText(ItemStack template, List<? extends Component> text) {
+        boolean name = isName(template);
         ItemStack result = template.clone();
         result.setAmount(1);
         ItemMeta meta = result.getItemMeta();
-        meta.lore(text);
+        meta.lore(name ? text.stream().map(Templates::wrapPreview).toList() : text);
         result.setItemMeta(meta);
         return result;
+    }
+
+    private boolean isName(ItemStack template) {
+        return Objects.requireNonNull(kind(template)).type() == Type.NAME;
+    }
+
+    /**
+     * A Name template's text is wrapped so that it previews in its lore like an unstyled custom name, while the name
+     * itself is applied without the wrapper.
+     */
+    private static @NonNull Component wrapPreview(Component line) {
+        return Component.text().style(PREVIEW).append(Objects.requireNonNull(line)).build();
+    }
+
+    /** The name inside a preview wrapper; Name templates crafted before the wrapper was introduced store it directly. */
+    private static @NonNull Component unwrapPreview(@NonNull Component line) {
+        if (line instanceof TextComponent wrapper && wrapper.content().isEmpty() && wrapper.children().size() == 1
+                && wrapper.color() instanceof TextColor color && color.value() == NamedTextColor.WHITE.value()) {
+            return Objects.requireNonNull(wrapper.children().getFirst());
+        }
+        return line;
     }
 
     /** Null means the target is incompatible or no property would change. */

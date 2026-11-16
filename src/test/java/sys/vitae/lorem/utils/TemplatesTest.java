@@ -24,6 +24,8 @@ import org.mockito.ArgumentCaptor;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
 
@@ -78,6 +80,30 @@ class TemplatesTest {
             verify(meta, never()).customName(any());
             assertEquals(1, construction.constructed().size());
         }
+    }
+
+    @Test
+    void nameTextPreviewsLikeACustomNameButAppliesUnchanged() {
+        Component plain = Component.text("a name");
+        ItemStack template = paper("name"), copy = paper("name");
+        when(template.clone()).thenReturn(copy);
+        ItemMeta copyMeta = copy.getItemMeta();
+        templates.withText(template, List.of(plain));
+
+        ArgumentCaptor<List<Component>> lore = ArgumentCaptor.captor();
+        verify(copyMeta).lore(lore.capture());
+        Component preview = Objects.requireNonNull(lore.getValue().getFirst());
+        assertEquals(TextDecoration.State.NOT_SET, preview.decoration(TextDecoration.ITALIC));
+        assertEquals(NamedTextColor.WHITE, preview.color());
+
+        when(copyMeta.lore()).thenReturn(lore.getValue());
+        assertEquals(List.of(plain), templates.text(copy));
+
+        // Lore templates show their text just as it will look once applied.
+        ItemStack loreTemplate = paper("lore"), loreCopy = paper("lore");
+        when(loreTemplate.clone()).thenReturn(loreCopy);
+        templates.withText(loreTemplate, List.of(plain));
+        verify(loreCopy.getItemMeta()).lore(List.of(plain));
     }
 
     @Test

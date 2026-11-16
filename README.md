@@ -58,6 +58,9 @@ including nested overrides, while retaining the other properties. Decorations
 turn off if already enabled everywhere; otherwise they turn on everywhere.
 Template names/lore have the usual italic default; signs do not.
 
+Name templates preview their name in white, like an unstyled custom name,
+instead of lore's usual purple.
+
 Several dyes can be mixed in one template craft. A Color template can also be
 crafted with a Name/Lore template to apply its preview colour to all of that
 template's text. Styling consumes the input template(s) and ingredients.
