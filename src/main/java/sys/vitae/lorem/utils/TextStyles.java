@@ -93,8 +93,22 @@ public final class TextStyles {
     public static @Nullable Style uniformStyle(List<? extends Component> lines) {
         List<@NonNull Style> styles = new ArrayList<>();
         for (Component line : lines) {
-            collectStyles(line, Style.empty(), styles);
+            collectStyles(line, Style.empty(), styles, false);
         }
+        return shared(styles);
+    }
+
+    /**
+     * Like {@link #uniformStyle}, but unset properties stay unset, so they keep showing the context's defaults
+     * (e.g. a custom name's italics).
+     */
+    public static @Nullable Style sharedStyle(Component component) {
+        List<@NonNull Style> styles = new ArrayList<>();
+        collectStyles(component, Style.empty(), styles, true);
+        return shared(styles);
+    }
+
+    private static @Nullable Style shared(List<@NonNull Style> styles) {
         if (styles.isEmpty()) {
             return Style.empty();
         }
@@ -102,23 +116,27 @@ public final class TextStyles {
         return styles.stream().allMatch(first::equals) ? first : null;
     }
 
-    private static void collectStyles(Component component, @NonNull Style inherited, List<@NonNull Style> styles) {
+    private static void collectStyles(Component component, @NonNull Style inherited, List<@NonNull Style> styles,
+            boolean keepUnset) {
         Style resolved = component.style().merge(inherited, Style.Merge.Strategy.IF_ABSENT_ON_TARGET);
         if (!(component instanceof net.kyori.adventure.text.TextComponent text) || !text.content().isEmpty()) {
-            Style.Builder visual = Style.style().color(resolved.color())
-                    .font(resolved.font() == null ? Key.key("default") : resolved.font());
+            Key font = resolved.font();
+            Style.Builder visual = Style.style().color(resolved.color()).font(keepUnset
+                    ? (Key.key("default").equals(font) ? null : font)
+                    : (font == null ? Key.key("default") : font));
             for (TextDecoration decoration : TextDecoration.values()) {
-                visual.decoration(decoration, resolved.decoration(decoration) == TextDecoration.State.TRUE);
+                TextDecoration.State state = resolved.decoration(decoration);
+                visual.decoration(decoration, keepUnset ? state : TextDecoration.State.byBoolean(state == TextDecoration.State.TRUE));
             }
             styles.add(visual.build());
         }
         for (Component child : component.children()) {
-            collectStyles(child, resolved, styles);
+            collectStyles(child, resolved, styles, keepUnset);
         }
         if (component instanceof TranslatableComponent translated) {
             for (var argument : translated.arguments()) {
                 if (argument.value() instanceof Component text) {
-                    collectStyles(text, resolved, styles);
+                    collectStyles(text, resolved, styles, keepUnset);
                 }
             }
         }
@@ -146,7 +164,7 @@ public final class TextStyles {
         List<@NonNull Style> styles = new ArrayList<>();
         Style defaults = Style.style().decoration(TextDecoration.ITALIC, italicDefault).build();
         for (Component line : lines) {
-            collectStyles(line, defaults, styles);
+            collectStyles(line, defaults, styles, false);
         }
         return !styles.isEmpty() && styles.stream()
                 .allMatch(style -> style.decoration(decoration) == TextDecoration.State.TRUE);

@@ -33,6 +33,7 @@ class TemplatesTest {
 
     private Templates templates;
     private final @NonNull NamespacedKey idKey = new NamespacedKey("loremipsum", "template_id");
+    private final @NonNull NamespacedKey nameTagKey = new NamespacedKey("loremipsum", "name_tag_id");
 
     @BeforeEach
     void setUp() {
@@ -166,6 +167,61 @@ class TemplatesTest {
 
         when(input.getItemMeta()).thenReturn(mock(ItemMeta.class));
         assertNull(templates.apply(input, color));
+    }
+
+    @Test
+    void nameResetTagIsLabelledByItemNameSoVanillaNeverAppliesIt() {
+        ItemMeta meta = mock(ItemMeta.class);
+        PersistentDataContainer data = mock(PersistentDataContainer.class);
+        when(meta.getPersistentDataContainer()).thenReturn(data);
+        try (var construction = mockConstruction(ItemStack.class, (item, context) -> {
+            assertEquals(List.of(Material.NAME_TAG), context.arguments());
+            when(item.getItemMeta()).thenReturn(meta);
+        })) {
+            templates.createNameReset();
+
+            verify(data).set(nameTagKey, PersistentDataType.STRING, "reset");
+            ArgumentCaptor<@NonNull Component> name = ArgumentCaptor.forClass(Component.class);
+            verify(meta).itemName(name.capture());
+            TranslatableComponent label = Objects.requireNonNull(
+                    assertInstanceOf(TranslatableComponent.class, name.getValue()));
+            assertEquals("item.minecraft.name_tag", label.key());
+            assertEquals("controls.reset", ((TranslatableComponent) label.children().getLast()).key());
+            verify(meta, never()).customName(any());
+            assertEquals(1, construction.constructed().size());
+        }
+    }
+
+    @Test
+    void renamedNameResetTagIsAnOrdinaryNameTag() {
+        ItemStack reset = nameTag("reset", false);
+        assertTrue(templates.isNameReset(reset));
+        assertSame(reset, templates.withoutNameReset(reset));
+        assertFalse(templates.isNameReset(nameTag(null, false)));
+        assertFalse(templates.isNameReset(paper("reset")));
+
+        ItemStack renamed = nameTag("reset", true), copy = nameTag("reset", true);
+        when(renamed.clone()).thenReturn(copy);
+        assertFalse(templates.isNameReset(renamed));
+        assertSame(copy, templates.withoutNameReset(renamed));
+        ItemMeta meta = copy.getItemMeta();
+        verify(meta.getPersistentDataContainer()).remove(nameTagKey);
+        verify(meta).itemName(null);
+        verify(meta).setEnchantmentGlintOverride(null);
+        verify(copy).setItemMeta(meta);
+    }
+
+    private ItemStack nameTag(String id, boolean named) {
+        ItemStack item = mock(ItemStack.class);
+        ItemMeta meta = mock(ItemMeta.class);
+        PersistentDataContainer data = mock(PersistentDataContainer.class);
+        when(item.getType()).thenReturn(Material.NAME_TAG);
+        when(item.getAmount()).thenReturn(1);
+        when(item.getItemMeta()).thenReturn(meta);
+        when(meta.getPersistentDataContainer()).thenReturn(data);
+        when(meta.hasCustomName()).thenReturn(named);
+        when(data.get(nameTagKey, Objects.requireNonNull(PersistentDataType.STRING))).thenReturn(id);
+        return item;
     }
 
     private ItemStack paper(String id) {

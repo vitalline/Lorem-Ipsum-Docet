@@ -35,6 +35,22 @@ Craft a non-reset template with **bone meal** to produce its typed reset:
 Reset templates can be copied in the same way. White dye is a colour ingredient,
 not a reset ingredient.
 
+### Name reset tags
+
+Craft an unnamed name tag with **bone meal** to get a shimmering name reset tag
+(`Name Tag - Reset`). Use it on a named mob, as you would a name tag, to remove
+the name. Like a vanilla name tag, it's consumed in Survival but not in Creative.
+It does nothing to unnamed mobs, and the click doesn't open a villager's trades
+or make a pet sit. Only the owner can clear a tamed animal's name.
+Interactions denied by protection plugins are left alone.
+
+- Named name tags aren't accepted, so a name is never wiped by accident.
+- The mob stays persistent: vanilla naming prevents despawning, and there's no
+  telling whether the mob despawned before it was named.
+- Removing a name also ends its vanilla Easter eggs, such as `Dinnerbone`,
+  `jeb_`, `Toast` and `Johnny`.
+- Renaming a reset tag in an anvil turns it into an ordinary named tag.
+
 ### Text colours, decorations, and fonts
 
 Craft a Name or Lore template with one of these ingredients. The same ingredients
@@ -100,6 +116,8 @@ item repeatedly. An undyed target contributes no initial colour.
 Templates use the plugin-namespaced persistent string key `template_id`:
 `name`, `lore`, `glint`, `color`, and `reset_` followed by the corresponding ID.
 Color recipes additionally use the persistent integer-array key `color_recipe`.
+Name reset tags use the persistent string key `name_tag_id` with the value
+`reset`, and have no custom name, so vanilla never applies them as a name.
 Names and lore are presentation/payload, not template identification.
 
 Display names use vanilla client translations, without a resource pack:
@@ -122,6 +140,14 @@ Existing escape syntax is as follows: `\0`-`\f` and `\xRRGGBB` for colours,
 `\\` for a literal backslash, and `\s` through `\w` for Unicode code points.
 Book-and-quill text stays raw until signing; book titles cannot retain fonts.
 
+### Renaming formatted items
+
+The anvil's rename field only shows plain text. A plain-text rename (without
+escape substitutions) keeps the style of the item's current name when the whole
+name shares one style; this applies to all players. Mixed formatting is dropped,
+as in vanilla. To get an unstyled name, remove the name first (clear the rename
+field, or apply a Name reset), then rename the item.
+
 ### Editing formatted signs
 
 - Authorized players normally edit escaped text, preserving mixed formatting.
@@ -140,4 +166,5 @@ including with Escape; Escape is not a separate server-visible cancel action.
 ## Tests
 
 Run `mvn test` for template recipes, property isolation, resets, colour replay,
-whole-text styling, permission overrides, and sign-editing regressions.
+whole-text styling, name reset tags, permission overrides, and sign-editing
+regressions.

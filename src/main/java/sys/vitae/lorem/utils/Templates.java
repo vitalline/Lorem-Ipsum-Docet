@@ -52,12 +52,55 @@ public final class Templates {
     private static final @NonNull PersistentDataType<int[], int[]> COLOR_RECIPE_TYPE =
             Objects.requireNonNull(PersistentDataType.INTEGER_ARRAY);
 
+    private static final String NAME_RESET_ID = "reset";
+
     private final @NonNull NamespacedKey idKey;
     private final @NonNull NamespacedKey colorKey;
+    private final @NonNull NamespacedKey nameTagKey;
 
     public Templates(Plugin plugin) {
         idKey = new NamespacedKey(plugin, "template_id");
         colorKey = new NamespacedKey(plugin, "color_recipe");
+        nameTagKey = new NamespacedKey(plugin, "name_tag_id");
+    }
+
+    /**
+     * A name tag that removes a mob's custom name. It must not have a custom name itself, or vanilla would apply that
+     * instead, so its label is an item name.
+     */
+    public @NonNull ItemStack createNameReset() {
+        ItemStack tag = new ItemStack(Material.NAME_TAG);
+        ItemMeta meta = tag.getItemMeta();
+        meta.itemName(Component.translatable("item.minecraft.name_tag", "Name Tag").append(Component.text(" - "))
+                .append(Component.translatable("controls.reset", "Reset")));
+        meta.getPersistentDataContainer().set(nameTagKey, PersistentDataType.STRING, NAME_RESET_ID);
+        meta.setEnchantmentGlintOverride(true);
+        tag.setItemMeta(meta);
+        return tag;
+    }
+
+    /** Whether the item is a name-resetting name tag; one that was renamed since is an ordinary name tag. */
+    public boolean isNameReset(@Nullable ItemStack item) {
+        return item != null && hasNameResetId(item) && !item.getItemMeta().hasCustomName();
+    }
+
+    /** A renamed name-resetting tag as the ordinary name tag it now is; the item itself otherwise. */
+    public ItemStack withoutNameReset(ItemStack item) {
+        if (!hasNameResetId(item) || !item.getItemMeta().hasCustomName()) {
+            return item;
+        }
+        ItemStack result = item.clone();
+        ItemMeta meta = result.getItemMeta();
+        meta.getPersistentDataContainer().remove(nameTagKey);
+        meta.itemName(null);
+        meta.setEnchantmentGlintOverride(null);
+        result.setItemMeta(meta);
+        return result;
+    }
+
+    private boolean hasNameResetId(ItemStack item) {
+        return item.getType() == Material.NAME_TAG && item.getAmount() > 0
+                && NAME_RESET_ID.equals(item.getItemMeta().getPersistentDataContainer().get(nameTagKey, STRING_TYPE));
     }
 
     public @Nullable Kind kind(@Nullable ItemStack item) {

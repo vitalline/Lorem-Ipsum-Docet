@@ -113,6 +113,23 @@ class TemplateCraftListenerTest {
     }
 
     @Test
+    void anUnnamedNameTagWithBoneMealCraftsANameResetTag() {
+        when(templates.createNameReset()).thenReturn(result);
+        ItemStack tag = item(Material.NAME_TAG);
+        var plan = listener.plan(new ItemStack[] {item(Material.BONE_MEAL), null, tag});
+        assertSame(result, plan.result());
+        assertEquals(List.of(0, 2), plan.consumed());
+
+        ItemStack named = item(Material.NAME_TAG), reset = item(Material.NAME_TAG);
+        when(named.getItemMeta().hasCustomName()).thenReturn(true);
+        when(templates.isNameReset(reset)).thenReturn(true);
+        for (ItemStack refused : List.of(named, reset, item(Material.PAPER))) {
+            assertNull(listener.plan(new ItemStack[] {refused, item(Material.BONE_MEAL)}));
+        }
+        assertNull(listener.plan(new ItemStack[] {tag, item(Material.BONE_MEAL), item(Material.BONE_MEAL)}));
+    }
+
+    @Test
     void colorDyeingAppendsOneGroupedStepInsteadOfFlatteningTheHistory() {
         ItemStack color = template(Type.COLOR, false);
         ColorRecipe original = new ColorRecipe(List.of(List.of(Color.RED)));

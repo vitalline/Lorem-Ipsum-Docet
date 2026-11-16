@@ -1,5 +1,7 @@
 package sys.vitae.lorem.listeners;
 
+import java.util.Objects;
+
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -12,12 +14,14 @@ import org.bukkit.inventory.view.AnvilView;
 import org.bukkit.plugin.Plugin;
 
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.Style;
 import sys.vitae.lorem.utils.FormatCodes;
 import sys.vitae.lorem.utils.FormattingAccess;
 import sys.vitae.lorem.utils.NameTags;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
+import sys.vitae.lorem.utils.TextStyles;
 
 /**
  * Anvil handling.
@@ -27,7 +31,9 @@ import sys.vitae.lorem.utils.Templates.Type;
  * <p><b>Renaming:</b> escape sequences in the rename text are translated (see {@link FormatCodes}).
  * A rename consisting solely of formatting codes replaces the leading formatting codes of the item's existing custom name.
  * Items without a custom name aren't renamed at all in that case, just like renaming an item to its current name in vanilla.
- * Name tags get a marker line while their name is formatted (see {@link NameTags}).
+ * Plain rename text keeps the style of a uniformly formatted name.
+ * Name tags get a marker line while their name is formatted (see {@link NameTags}), and a renamed name-resetting tag
+ * becomes an ordinary name tag.
  *
  * <p>Typed templates in the second slot apply just their property, consuming one sheet.
  * Other than a Name template, these can be combined with renaming. They are priced like a rename.
@@ -56,39 +62,50 @@ public class AnvilListener implements Listener {
         if (kind != null) {
             applyTemplate(event, input, addition, kind, formatting);
         } else {
-            if (formatting) {
-                translateRename(event, input);
-            }
+            fixRename(event, input, formatting);
             markNameTag(event);
         }
     }
 
-    /** Keeps the formatting marker of a renamed name tag in sync, also when the rename wasn't translated. */
-    private static void markNameTag(PrepareAnvilEvent event) {
+    /**
+     * Keeps the formatting marker of a renamed name tag in sync, also when the rename wasn't translated, and turns a
+     * renamed name-resetting tag into an ordinary one.
+     */
+    private void markNameTag(PrepareAnvilEvent event) {
         ItemStack result = event.getResult();
         if (result == null || result.isEmpty()) {
             return;
         }
-        ItemStack marked = NameTags.withMarker(result);
+        ItemStack marked = templates.withoutNameReset(NameTags.withMarker(result));
         if (marked != result) {
             event.setResult(marked);
         }
     }
 
-    /** Fixes up the name of vanilla's output. */
-    private static void translateRename(PrepareAnvilEvent event, ItemStack input) {
+    /**
+     * Fixes up the name of vanilla's output: translates escapes, or keeps the style of the old name for plain text
+     * (see {@link #plainName}).
+     */
+    private static void fixRename(PrepareAnvilEvent event, ItemStack input, boolean formatting) {
         ItemStack result = event.getResult();
         String renameText = event.getView().getRenameText();
-        if (result == null || result.isEmpty() || !FormatCodes.hasEscapes(renameText)
-                || !isRenamedTo(result, input, renameText)) {
+        if (result == null || result.isEmpty() || !isRenamedTo(result, input, renameText)) {
             return;
         }
 
         Component oldName = customName(input);
-        Component name = translateName(renameText, oldName);
-        if (FormatCodes.sameText(name, oldName)) {
-            cancelRename(event, result, input);
-            return;
+        Component name;
+        if (formatting && FormatCodes.hasEscapes(renameText)) {
+            name = translateName(renameText, oldName);
+            if (FormatCodes.sameText(name, oldName)) {
+                cancelRename(event, result, input);
+                return;
+            }
+        } else {
+            name = plainName(renameText, oldName);
+            if (name.equals(customName(result))) {
+                return;
+            }
         }
 
         ItemStack out = result.clone();
@@ -113,7 +130,7 @@ public class AnvilListener implements Listener {
             meta.customName(name);
             applied.setItemMeta(meta);
         }
-        ItemStack out = NameTags.withMarker(applied);
+        ItemStack out = templates.withoutNameReset(NameTags.withMarker(applied));
         if (out.isSimilar(input)) {
             return; // e.g. a Lore reset on a name tag whose only lore is the marker
         }
@@ -143,7 +160,16 @@ public class AnvilListener implements Listener {
         if (oldName != null && renameText.equals(FormatCodes.plainText(oldName))) {
             return oldName;
         }
-        return formatting && FormatCodes.hasEscapes(renameText) ? translateName(renameText, oldName) : Component.text(renameText);
+        return formatting && FormatCodes.hasEscapes(renameText) ? translateName(renameText, oldName) : plainName(renameText, oldName);
+    }
+
+    /**
+     * Plain rename text in the style the whole old name shared, as the rename field can only show plain text.
+     * Mixed formatting is dropped, as in vanilla.
+     */
+    private static Component plainName(String renameText, Component oldName) {
+        Style style = oldName == null ? null : TextStyles.sharedStyle(oldName);
+        return Component.text(Objects.requireNonNull(renameText), style == null ? Style.empty() : style);
     }
 
     /** Translates the rename text; returns {@code oldName} if that wouldn't rename the item. */

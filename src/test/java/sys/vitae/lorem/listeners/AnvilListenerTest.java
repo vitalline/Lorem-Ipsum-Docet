@@ -1,5 +1,6 @@
 package sys.vitae.lorem.listeners;
 
+import static org.mockito.AdditionalAnswers.returnsFirstArg;
 import static org.mockito.Mockito.*;
 import static sys.vitae.lorem.NonNullMockito.mock;
 import static sys.vitae.lorem.NonNullMockito.verify;
@@ -46,6 +47,7 @@ class AnvilListenerTest {
         when(plugin.getServer()).thenReturn(server);
         when(server.getScheduler()).thenReturn(mock(BukkitScheduler.class));
         templates = mock(Templates.class);
+        when(templates.withoutNameReset(any())).thenAnswer(returnsFirstArg());
         listener = new AnvilListener(plugin, templates);
         event = mock(PrepareAnvilEvent.class);
         view = mock(AnvilView.class);
@@ -155,6 +157,55 @@ class AnvilListenerTest {
         when(meta.customName()).thenReturn(name);
         when(meta.lore()).thenReturn(lore);
         return tag;
+    }
+
+    @Test
+    void renamingANameResetTagMakesItAnOrdinaryNameTag() {
+        ItemStack renamed = mock(ItemStack.class), ordinary = mock(ItemStack.class);
+        when(event.getResult()).thenReturn(renamed);
+        when(templates.withoutNameReset(renamed)).thenReturn(ordinary);
+
+        listener.onPrepareAnvil(event);
+        verify(event).setResult(ordinary);
+    }
+
+    @Test
+    void plainRenameKeepsTheStyleOfAUniformlyFormattedNameWithoutFormattingAccess() {
+        assertRenamed(FormatCodes.toComponent("\\a\\l\\hTest"), FormatCodes.toComponent("\\a\\l\\hTestificate"));
+        // An unset italic stays unset, so it keeps following the context (italic in tooltips, upright on mobs).
+        assertRenamed(Component.text("Test", NamedTextColor.GREEN), Component.text("Testificate", NamedTextColor.GREEN));
+    }
+
+    @Test
+    void plainRenameOfAnUnstyledOrMixedFormattedNameIsLeftToVanilla() {
+        for (Component oldName : List.of(Component.text("Test"),
+                Component.text("Te", NamedTextColor.GREEN).append(Component.text("st", NamedTextColor.RED)))) {
+            assertRenamed(oldName, null);
+        }
+    }
+
+    /** Renames the input from {@code oldName} to "Testificate"; {@code expected} is null for vanilla's plain name. */
+    private void assertRenamed(Component oldName, Component expected) {
+        clearInvocations(event);
+        when(inputMeta.hasCustomName()).thenReturn(true);
+        when(inputMeta.customName()).thenReturn(oldName);
+        when(view.getRenameText()).thenReturn("Testificate");
+        ItemStack vanilla = mock(ItemStack.class), styled = mock(ItemStack.class);
+        ItemMeta vanillaMeta = mock(ItemMeta.class), styledMeta = mock(ItemMeta.class);
+        when(event.getResult()).thenReturn(vanilla);
+        when(vanilla.getItemMeta()).thenReturn(vanillaMeta);
+        when(vanillaMeta.hasCustomName()).thenReturn(true);
+        when(vanillaMeta.customName()).thenReturn(Component.text("Testificate"));
+        when(vanilla.clone()).thenReturn(styled);
+        when(styled.getItemMeta()).thenReturn(styledMeta);
+
+        listener.onPrepareAnvil(event);
+        if (expected == null) {
+            verify(event, never()).setResult(any());
+        } else {
+            verify(styledMeta).customName(expected);
+            verify(event).setResult(styled);
+        }
     }
 
     @Test

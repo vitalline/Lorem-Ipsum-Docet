@@ -209,6 +209,9 @@ public class TemplateCraftListener implements Listener {
             }
             return null;
         }
+        if (marked.isEmpty() && sheets.isEmpty()) {
+            return isNameResetCraft(ingredients) ? new Plan(templates.createNameReset(), used) : null;
+        }
         if (!marked.isEmpty() || sheets.isEmpty()) {
             return null;
         }
@@ -238,6 +241,18 @@ public class TemplateCraftListener implements Listener {
         }
         List<Color> dyes = dyes(ingredients);
         return dyes == null ? null : new Plan(templates.createColor(new ColorRecipe(List.of(dyes))), used);
+    }
+
+    /** An unnamed ordinary name tag and bone meal; named tags are refused, so a name is never wiped by accident. */
+    private boolean isNameResetCraft(List<ItemStack> ingredients) {
+        if (ingredients.size() != 2) {
+            return false;
+        }
+        ItemStack first = ingredients.get(0), second = ingredients.get(1);
+        ItemStack tag = first.getType() == Material.BONE_MEAL ? second : first;
+        ItemStack boneMeal = tag == first ? second : first;
+        return boneMeal.getType() == Material.BONE_MEAL && tag.getType() == Material.NAME_TAG
+                && !tag.getItemMeta().hasCustomName() && !templates.isNameReset(tag);
     }
 
     private static boolean isNugget(ItemStack item) {
