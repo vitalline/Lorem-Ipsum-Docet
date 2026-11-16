@@ -19,21 +19,28 @@ import org.jspecify.annotations.NonNull;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.sound.Sound;
+import net.kyori.adventure.text.Component;
 import sys.vitae.lorem.utils.ItemConsumption;
+import sys.vitae.lorem.utils.NameTags;
 import sys.vitae.lorem.utils.Templates;
+import sys.vitae.lorem.utils.Templates.Variant;
 
 /**
  * Name-resetting name tags remove a mob's custom name, consuming one tag like vanilla's name tags do.
  * The mob stays persistent, as there is no telling whether it despawned before it was named.
+ * Name-copying name tags turn into an ordinary name tag carrying the mob's name, leaving the mob untouched.
  */
-public class NameResetListener implements Listener {
+public class NameTagListener implements Listener {
 
     private static final @NonNull Sound PAGE_TURN = Objects.requireNonNull(
             Sound.sound(Key.key("item.book.page_turn"), Sound.Source.PLAYER, 1, 1));
+    /** The cartography table's, which copies maps. */
+    private static final @NonNull Sound COPY = Objects.requireNonNull(
+            Sound.sound(Key.key("ui.cartography_table.take_result"), Sound.Source.PLAYER, 1, 1));
 
     private final Templates templates;
 
-    public NameResetListener(Templates templates) {
+    public NameTagListener(Templates templates) {
         this.templates = templates;
     }
 
@@ -43,19 +50,35 @@ public class NameResetListener implements Listener {
         Player player = event.getPlayer();
         EquipmentSlot hand = event.getHand();
         ItemStack tag = player.getInventory().getItem(hand);
-        if (!templates.isNameReset(tag) || !(event.getRightClicked() instanceof LivingEntity entity)
-                || entity instanceof Player || entity.customName() == null || !mayRename(player, entity)) {
+        Variant variant = templates.nameTagVariant(tag);
+        if (variant == null || !(event.getRightClicked() instanceof LivingEntity entity) || entity instanceof Player
+                || !(entity.customName() instanceof Component name)
+                || (variant == Variant.RESET && !mayRename(player, entity))) {
             return;
         }
         event.setCancelled(true);
-        entity.customName(null);
-        if (player.getGameMode() != GameMode.CREATIVE) {
-            player.getInventory().setItem(hand, ItemConsumption.consumeOne(tag, player));
+        boolean survival = player.getGameMode() != GameMode.CREATIVE;
+        World world = entity.getWorld();
+        if (variant == Variant.RESET) {
+            entity.customName(null);
+            if (survival) {
+                player.getInventory().setItem(hand, ItemConsumption.consumeOne(tag, player));
+            }
+            world.playSound(PAGE_TURN, entity);
+            world.spawnParticle(Particle.POOF, entity.getLocation().add(0, entity.getHeight(), 0), 5, 0.2, 0.1, 0.2, 0.01);
+        } else {
+            ItemStack named = NameTags.named(name);
+            if (survival && tag.getAmount() == 1) {
+                player.getInventory().setItem(hand, named);
+            } else {
+                if (survival) {
+                    player.getInventory().setItem(hand, ItemConsumption.consumeOne(tag, player));
+                }
+                ItemConsumption.give(player, named);
+            }
+            world.playSound(COPY, entity);
         }
         player.swingHand(hand);
-        World world = entity.getWorld();
-        world.playSound(PAGE_TURN, entity);
-        world.spawnParticle(Particle.POOF, entity.getLocation().add(0, entity.getHeight(), 0), 5, 0.2, 0.1, 0.2, 0.01);
     }
 
     /** Only a tamed animal's owner may remove its name. */

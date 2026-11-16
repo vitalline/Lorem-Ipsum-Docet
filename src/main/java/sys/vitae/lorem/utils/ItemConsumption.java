@@ -22,10 +22,15 @@ public final class ItemConsumption {
         ItemStack remaining = ingredient.clone();
         remaining.setAmount(amount - 1);
         if (bottle != null) {
-            for (ItemStack overflow : player.getInventory().addItem(bottle).values()) {
-                player.getWorld().dropItemNaturally(player.getLocation(), overflow);
-            }
+            give(player, bottle);
         }
         return remaining;
+    }
+
+    /** Puts the item into the player's inventory, dropping whatever doesn't fit nearby. */
+    public static void give(Player player, ItemStack item) {
+        for (ItemStack overflow : player.getInventory().addItem(item).values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), overflow);
+        }
     }
 }

@@ -26,7 +26,7 @@ class ItemConsumptionTest {
     void lastWaterBottleIsReplacedInItsSlotRatherThanAddedToTheInventory() {
         ItemStack water = water(1);
         Player player = mock(Player.class);
-        try (var construction = mockConstruction(ItemStack.class, (bottle, context) ->
+        try (var construction = mockConstruction(ItemStack.class, (_, context) ->
                 assertEquals(List.of(Material.GLASS_BOTTLE), context.arguments()))) {
             ItemStack remaining = ItemConsumption.consumeOne(water, player);
             assertEquals(1, construction.constructed().size());
@@ -53,7 +53,7 @@ class ItemConsumptionTest {
                 return full ? new HashMap<>(Map.of(0, bottle)) : new HashMap<>();
             });
 
-            try (var construction = mockConstruction(ItemStack.class, (bottle, context) ->
+            try (var construction = mockConstruction(ItemStack.class, (_, context) ->
                     assertEquals(List.of(Material.GLASS_BOTTLE), context.arguments()))) {
                 assertSame(remaining, ItemConsumption.consumeOne(water, player));
                 assertEquals(1, construction.constructed().size());

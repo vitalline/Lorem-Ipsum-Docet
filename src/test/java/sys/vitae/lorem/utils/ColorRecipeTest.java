@@ -42,9 +42,22 @@ class ColorRecipeTest {
     }
 
     @Test
+    void copiedBaseReplacesTheExistingDyeAndLaterStepsBuildOnIt() {
+        ColorRecipe copied = ColorRecipe.of(Color.fromRGB(0x123456));
+        assertEquals(Color.fromRGB(0x123456), copied.apply(Color.WHITE));
+        assertEquals(Color.fromRGB(0x123456), copied.apply(null));
+        ColorRecipe dyed = copied.append(List.of(Color.RED));
+        assertEquals(new ColorRecipe(List.of(List.of(Color.RED))).apply(Color.fromRGB(0x123456)), dyed.apply(Color.WHITE));
+
+        for (ColorRecipe recipe : List.of(copied, dyed, ColorRecipe.of(Color.BLACK))) {
+            assertEquals(recipe, ColorRecipe.decode(recipe.encode()));
+        }
+    }
+
+    @Test
     void rejectsMalformedPayloads() {
         for (int[] data : List.of(new int[0], new int[] {0}, new int[] {-1}, new int[] {2, 0x123456},
-                new int[] {1, -1})) {
+                new int[] {1, -1}, new int[] {0, -1}, new int[] {0, 0x123456, 2, 0x123456})) {
             assertThrows(IllegalArgumentException.class, () -> ColorRecipe.decode(data));
         }
     }

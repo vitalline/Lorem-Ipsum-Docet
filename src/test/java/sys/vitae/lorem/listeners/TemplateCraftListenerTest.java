@@ -48,6 +48,7 @@ import sys.vitae.lorem.utils.FormatCodes;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
+import sys.vitae.lorem.utils.Templates.Variant;
 import sys.vitae.lorem.utils.TextStyles;
 
 class TemplateCraftListenerTest {
@@ -93,45 +94,110 @@ class TemplateCraftListenerTest {
             assertNull(listener.plan(new ItemStack[] {sheet(null), item(nugget)}));
         }
 
-        when(templates.create(new Kind(Type.GLINT, false))).thenReturn(result);
+        when(templates.create(new Kind(Type.GLINT, Variant.PLAIN))).thenReturn(result);
         assertSame(result, listener.plan(new ItemStack[] {sheet(null), item(Material.GLOWSTONE_DUST)}).result());
     }
 
     @Test
-    void whiteDyeProducesColorWhileBoneMealProducesTypedReset() {
+    void whiteDyeProducesColorWhileBoneMealAndInkSacProduceTypedResetAndCopy() {
         ItemStack paper = sheet(null);
         ColorRecipe white = new ColorRecipe(List.of(List.of(DyeColor.WHITE.getColor())));
         when(templates.createColor(white)).thenReturn(result);
         assertSame(result, listener.plan(new ItemStack[] {paper, item(Material.WHITE_DYE)}).result());
 
         for (Type type : Type.values()) {
-            ItemStack template = template(type, false);
-            when(templates.create(new Kind(type, true))).thenReturn(result);
-            assertSame(result, listener.plan(new ItemStack[] {template, item(Material.BONE_MEAL)}).result());
-            assertNull(listener.plan(new ItemStack[] {template(type, true), item(Material.BONE_MEAL)}));
+            for (Variant variant : List.of(Variant.RESET, Variant.COPY)) {
+                Material ingredient = variant == Variant.RESET ? Material.BONE_MEAL : Material.INK_SAC;
+                ItemStack template = template(type, Variant.PLAIN);
+                if (variant == Variant.COPY && !type.isCopyable()) {
+                    assertNull(listener.plan(new ItemStack[] {template, item(ingredient)}));
+                    continue;
+                }
+                ItemStack converted = item(Material.PAPER);
+                when(templates.create(new Kind(type, variant))).thenReturn(converted);
+                assertSame(converted, listener.plan(new ItemStack[] {template, item(ingredient)}).result());
+                // Only plain templates convert; a Copy template takes the item as its source instead.
+                assertNull(listener.plan(new ItemStack[] {template(type, Variant.RESET), item(ingredient)}));
+            }
         }
     }
 
     @Test
-    void anUnnamedNameTagWithBoneMealCraftsANameResetTag() {
-        when(templates.createNameReset()).thenReturn(result);
+    void plainRecipesWithBoneMealOrAnInkSacCraftResetAndCopyTemplatesDirectly() {
+        record Recipe(Kind kind, ItemStack... grid) {}
+        for (Variant variant : List.of(Variant.RESET, Variant.COPY)) {
+            Material added = variant == Variant.RESET ? Material.BONE_MEAL : Material.INK_SAC;
+            for (Recipe recipe : List.of(
+                    new Recipe(new Kind(Type.NAME, variant), sheet(null), item(Material.GOLD_NUGGET), item(added)),
+                    new Recipe(new Kind(Type.NAME, variant), item(added), sheet(Component.text("x")), item(Material.IRON_NUGGET)),
+                    new Recipe(new Kind(Type.LORE, variant), sheet(null), sheet(Component.text("x")), item(added)),
+                    new Recipe(new Kind(Type.COLOR, variant),
+                            sheet(null), item(Material.RED_DYE), item(Material.BLUE_DYE), item(added)))) {
+                ItemStack crafted = item(Material.PAPER);
+                when(templates.create(recipe.kind())).thenReturn(crafted);
+                var plan = listener.plan(recipe.grid());
+                assertSame(crafted, plan.result());
+                assertEquals(recipe.grid().length, plan.consumed().size());
+            }
+            for (ItemStack[] refused : List.of(
+                    new ItemStack[] {sheet(null), item(added)},
+                    new ItemStack[] {sheet(null), sheet(null), sheet(null), item(added)},
+                    new ItemStack[] {sheet(null), item(Material.IRON_NUGGET), item(added), item(added)},
+                    new ItemStack[] {sheet(null), item(Material.IRON_NUGGET), item(Material.BONE_MEAL), item(Material.INK_SAC)},
+                    new ItemStack[] {sheet(null), item(Material.IRON_NUGGET), item(Material.STICK), item(added)})) {
+                assertNull(listener.plan(refused));
+            }
+        }
+        when(templates.create(new Kind(Type.GLINT, Variant.RESET))).thenReturn(result);
+        assertSame(result, listener.plan(new ItemStack[] {sheet(null), item(Material.GLOWSTONE_DUST), item(Material.BONE_MEAL)}).result());
+        assertNull(listener.plan(new ItemStack[] {sheet(null), item(Material.GLOWSTONE_DUST), item(Material.INK_SAC)}));
+    }
+
+    @Test
+    void copyTemplateTakesItsPropertyOffTheSourceWithoutConsumingIt() {
+        ItemStack template = template(Type.LORE, Variant.COPY), source = item(Material.DIAMOND_SWORD);
+        when(templates.copyFrom(Type.LORE, source)).thenReturn(result);
+        var plan = listener.plan(new ItemStack[] {source, null, template});
+        assertSame(result, plan.result());
+        assertEquals(List.of(2), plan.consumed());
+
+        // Ingredients that would otherwise style or convert a template are sources too.
+        ItemStack bare = item(Material.BONE_MEAL);
+        assertNull(listener.plan(new ItemStack[] {template, bare}));
+        verify(templates).copyFrom(Type.LORE, bare);
+        verify(templates, never()).create(any(Kind.class));
+        assertNull(listener.plan(new ItemStack[] {template, source, item(Material.STICK)}));
+        // Two templates are never a copy, even if the other one holds the property.
+        assertNull(listener.plan(new ItemStack[] {template, template(Type.LORE, Variant.PLAIN)}));
+    }
+
+    @Test
+    void anUnnamedNameTagWithBoneMealOrAnInkSacCraftsAResetOrCopyTag() {
+        when(templates.createNameTag(Variant.RESET)).thenReturn(result);
         ItemStack tag = item(Material.NAME_TAG);
         var plan = listener.plan(new ItemStack[] {item(Material.BONE_MEAL), null, tag});
         assertSame(result, plan.result());
         assertEquals(List.of(0, 2), plan.consumed());
+        ItemStack copy = item(Material.NAME_TAG);
+        when(templates.createNameTag(Variant.COPY)).thenReturn(copy);
+        assertSame(copy, listener.plan(new ItemStack[] {tag, item(Material.INK_SAC)}).result());
 
-        ItemStack named = item(Material.NAME_TAG), reset = item(Material.NAME_TAG);
+        ItemStack named = item(Material.NAME_TAG), reset = item(Material.NAME_TAG), copier = item(Material.NAME_TAG);
         when(named.getItemMeta().hasCustomName()).thenReturn(true);
-        when(templates.isNameReset(reset)).thenReturn(true);
-        for (ItemStack refused : List.of(named, reset, item(Material.PAPER))) {
-            assertNull(listener.plan(new ItemStack[] {refused, item(Material.BONE_MEAL)}));
+        when(templates.nameTagVariant(reset)).thenReturn(Variant.RESET);
+        when(templates.nameTagVariant(copier)).thenReturn(Variant.COPY);
+        for (ItemStack refused : List.of(named, reset, copier, item(Material.PAPER))) {
+            for (Material ingredient : List.of(Material.BONE_MEAL, Material.INK_SAC)) {
+                assertNull(listener.plan(new ItemStack[] {refused, item(ingredient)}));
+            }
         }
         assertNull(listener.plan(new ItemStack[] {tag, item(Material.BONE_MEAL), item(Material.BONE_MEAL)}));
+        assertNull(listener.plan(new ItemStack[] {item(Material.INK_SAC), item(Material.BONE_MEAL)}));
     }
 
     @Test
     void colorDyeingAppendsOneGroupedStepInsteadOfFlatteningTheHistory() {
-        ItemStack color = template(Type.COLOR, false);
+        ItemStack color = template(Type.COLOR, Variant.PLAIN);
         ColorRecipe original = new ColorRecipe(List.of(List.of(Color.RED)));
         when(templates.colorRecipe(color)).thenReturn(original);
         when(templates.createColor(original.append(List.of(DyeColor.BLUE.getColor(), DyeColor.WHITE.getColor()))))
@@ -144,7 +210,7 @@ class TemplateCraftListenerTest {
     void colorTemplateStylesNameAndLoreInsteadOfCopyingItsDescription() {
         List<@NonNull Component> expected = TextStyles.color(STYLED, TextColor.color(Color.RED.asRGB()));
         for (Type type : List.of(Type.NAME, Type.LORE)) {
-            ItemStack text = template(type, false), color = template(Type.COLOR, false);
+            ItemStack text = template(type, Variant.PLAIN), color = template(Type.COLOR, Variant.PLAIN);
             when(templates.text(text)).thenReturn(STYLED);
             when(templates.colorRecipe(color)).thenReturn(new ColorRecipe(List.of(List.of(Color.RED))));
             when(templates.withText(text, expected)).thenReturn(result);
@@ -164,7 +230,7 @@ class TemplateCraftListenerTest {
         assertNotEquals(STYLED, expected);
 
         for (Type type : List.of(Type.NAME, Type.LORE)) {
-            ItemStack template = template(type, false);
+            ItemStack template = template(type, Variant.PLAIN);
             when(templates.text(template)).thenReturn(STYLED);
             when(templates.withText(template, expected)).thenReturn(result);
             assertSame(result, listener.plan(grid(template, ingredients)).result());
@@ -182,17 +248,20 @@ class TemplateCraftListenerTest {
 
     @Test
     void rejectsOtherIngredients() {
-        ItemStack template = template(Type.LORE, false);
+        ItemStack template = template(Type.LORE, Variant.PLAIN);
         when(templates.text(template)).thenReturn(STYLED);
         assertNull(listener.plan(new ItemStack[] {template, item(Material.ENCHANTING_TABLE)}));
         assertNull(listener.plan(new ItemStack[] {template, item(Material.RED_DYE), item(Material.COAL)}));
     }
 
     @Test
-    void copiesEachTemplateIncludingResetsButDoesNotCombineTwoOfTheSameType() {
+    void copiesEachTemplateIncludingVariantsButDoesNotCombineTwoOfTheSameType() {
         for (Type type : Type.values()) {
-            for (boolean reset : new boolean[] {false, true}) {
-                ItemStack template = template(type, reset);
+            for (Variant variant : Variant.values()) {
+                if (variant == Variant.COPY && !type.isCopyable()) {
+                    continue;
+                }
+                ItemStack template = template(type, variant);
                 when(template.clone()).thenReturn(result);
                 assertSame(result, listener.plan(new ItemStack[] {template, sheet(null), sheet(Component.text("ignored"))}).result());
                 verify(result).setAmount(3);
@@ -206,7 +275,7 @@ class TemplateCraftListenerTest {
     @EnumSource(value = ClickType.class, names = {
             "LEFT", "RIGHT", "NUMBER_KEY", "SHIFT_LEFT", "SHIFT_RIGHT", "DROP", "CONTROL_DROP"})
     void takingWaterStyledTemplateLeavesOneEmptyBottleInTheGrid(ClickType click) {
-        ItemStack template = template(Type.NAME, false);
+        ItemStack template = template(Type.NAME, Variant.PLAIN);
         ItemStack water = ingredient(Material.POTION);
         var original = List.of(FormatCodes.toComponent("\\gName"));
         when(templates.text(template)).thenReturn(Objects.requireNonNull(original));
@@ -235,7 +304,7 @@ class TemplateCraftListenerTest {
         when(event.getWhoClicked()).thenReturn(player);
         when(event.getClick()).thenReturn(click);
 
-        try (var construction = mockConstruction(ItemStack.class, (bottle, context) ->
+        try (var construction = mockConstruction(ItemStack.class, (_, context) ->
                 assertEquals(List.of(Material.GLASS_BOTTLE), context.arguments()))) {
             listener.onResultClick(event);
             verify(event).setCancelled(true);
@@ -255,7 +324,7 @@ class TemplateCraftListenerTest {
 
     @Test
     void creativeMiddleClickPicksAFullStackWithoutCrafting() {
-        ItemStack template = template(Type.NAME, false), copies = item(Material.PAPER), stack = item(Material.PAPER);
+        ItemStack template = template(Type.NAME, Variant.PLAIN), copies = item(Material.PAPER), stack = item(Material.PAPER);
         when(template.clone()).thenReturn(copies);
         when(copies.clone()).thenReturn(stack);
         when(stack.getMaxStackSize()).thenReturn(64);
@@ -282,9 +351,9 @@ class TemplateCraftListenerTest {
         verify(inventory, never()).setMatrix(any());
     }
 
-    private @NonNull ItemStack template(Type type, boolean reset) {
+    private @NonNull ItemStack template(Type type, Variant variant) {
         ItemStack item = item(Material.PAPER);
-        when(templates.kind(item)).thenReturn(new Kind(type, reset));
+        when(templates.kind(item)).thenReturn(new Kind(type, variant));
         return item;
     }
 

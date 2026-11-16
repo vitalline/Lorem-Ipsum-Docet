@@ -5,11 +5,14 @@ import static org.mockito.Mockito.*;
 import static sys.vitae.lorem.NonNullMockito.mock;
 import static sys.vitae.lorem.NonNullMockito.verify;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +21,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 
 class NameTagsTest {
 
-    private static final Component LORE = Component.text("lore");
+    private static final @NonNull Component LORE = Objects.requireNonNull(Component.text("lore"));
 
     @Test
     void formattedNamesGetTheMarkerAfterOtherLoreUnlessAlreadyMarked() {
@@ -50,15 +53,36 @@ class NameTagsTest {
         verify(paper, never()).clone();
     }
 
+    @Test
+    void namedCreatesAnOrdinaryNameTagMarkedOnlyForFormattedNames() {
+        for (Component name : List.of(Component.text("Mob"), Component.text("Mob", NamedTextColor.RED))) {
+            ItemMeta meta = mock(ItemMeta.class);
+            try (var construction = mockConstruction(ItemStack.class, (item, context) -> {
+                assertEquals(List.of(Material.NAME_TAG), context.arguments());
+                when(item.getItemMeta()).thenReturn(meta);
+            })) {
+                ItemStack tag = NameTags.named(name);
+                verify(meta).customName(name);
+                if (name.color() == null) {
+                    verify(meta, never()).lore(any());
+                } else {
+                    verify(meta).lore(List.of(NameTags.MARKER));
+                }
+                verify(tag).setItemMeta(meta);
+                assertEquals(List.of(tag), construction.constructed());
+            }
+        }
+    }
+
     /** A name tag whose (single) clone has the given name and lore. */
-    private static ItemStack nameTag(@Nullable Component name, @Nullable List<Component> lore) {
+    private static ItemStack nameTag(@Nullable Component name, @Nullable List<? extends Component> lore) {
         ItemStack tag = mock(ItemStack.class), copy = mock(ItemStack.class);
         ItemMeta meta = mock(ItemMeta.class);
         when(tag.getType()).thenReturn(Material.NAME_TAG);
         when(tag.clone()).thenReturn(copy);
         when(copy.getItemMeta()).thenReturn(meta);
         when(meta.customName()).thenReturn(name);
-        when(meta.lore()).thenReturn(lore);
+        when(meta.lore()).thenReturn(lore == null ? null : new ArrayList<Component>(lore));
         return tag;
     }
 }

@@ -32,8 +32,8 @@ import sys.vitae.lorem.utils.TextStyles;
  * A rename consisting solely of formatting codes replaces the leading formatting codes of the item's existing custom name.
  * Items without a custom name aren't renamed at all in that case, just like renaming an item to its current name in vanilla.
  * Plain rename text keeps the style of a uniformly formatted name.
- * Name tags get a marker line while their name is formatted (see {@link NameTags}), and a renamed name-resetting tag
- * becomes an ordinary name tag.
+ * Name tags get a marker line while their name is formatted (see {@link NameTags}), and a renamed name-resetting or
+ * name-copying tag becomes an ordinary name tag.
  *
  * <p>Typed templates in the second slot apply just their property, consuming one sheet.
  * Other than a Name template, these can be combined with renaming. They are priced like a rename.
@@ -69,14 +69,14 @@ public class AnvilListener implements Listener {
 
     /**
      * Keeps the formatting marker of a renamed name tag in sync, also when the rename wasn't translated, and turns a
-     * renamed name-resetting tag into an ordinary one.
+     * renamed name-resetting or name-copying tag into an ordinary one.
      */
     private void markNameTag(PrepareAnvilEvent event) {
         ItemStack result = event.getResult();
         if (result == null || result.isEmpty()) {
             return;
         }
-        ItemStack marked = templates.withoutNameReset(NameTags.withMarker(result));
+        ItemStack marked = templates.asOrdinaryNameTag(NameTags.withMarker(result));
         if (marked != result) {
             event.setResult(marked);
         }
@@ -130,7 +130,7 @@ public class AnvilListener implements Listener {
             meta.customName(name);
             applied.setItemMeta(meta);
         }
-        ItemStack out = templates.withoutNameReset(NameTags.withMarker(applied));
+        ItemStack out = templates.asOrdinaryNameTag(NameTags.withMarker(applied));
         if (out.isSimilar(input)) {
             return; // e.g. a Lore reset on a name tag whose only lore is the marker
         }

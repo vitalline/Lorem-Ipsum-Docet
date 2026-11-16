@@ -24,6 +24,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
@@ -32,10 +33,11 @@ import sys.vitae.lorem.utils.ItemConsumption;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
+import sys.vitae.lorem.utils.Templates.Variant;
 import sys.vitae.lorem.utils.TextStyles;
 
 /**
- * Template composition, copying, styling and resets in either crafting grid.
+ * Template composition, copying, styling, resets and copy variants in either crafting grid.
  * There is no registered recipe behind these, so taking the result is handled manually: vanilla's
  * no-recipe path would hand back the ingredients instead of consuming them.
  */
@@ -156,6 +158,7 @@ public class TemplateCraftListener implements Listener {
         List<ItemStack> marked = new ArrayList<>();
         List<ItemStack> sheets = new ArrayList<>();
         List<ItemStack> ingredients = new ArrayList<>();
+        List<Integer> ingredientSlots = new ArrayList<>();
         for (int i = 0; i < matrix.length; i++) {
             ItemStack item = matrix[i];
             if (isEmpty(item)) {
@@ -168,6 +171,7 @@ public class TemplateCraftListener implements Listener {
                 sheets.add(item);
             } else {
                 ingredients.add(item);
+                ingredientSlots.add(i);
             }
         }
 
@@ -180,9 +184,9 @@ public class TemplateCraftListener implements Listener {
             ItemStack text = null, color = null;
             for (ItemStack item : marked) {
                 Kind kind = Objects.requireNonNull(templates.kind(item));
-                if (!kind.reset() && kind.type().hasText()) {
+                if (kind.variant() == Variant.PLAIN && kind.type().hasText()) {
                     text = item;
-                } else if (!kind.reset() && kind.type() == Type.COLOR) {
+                } else if (kind.variant() == Variant.PLAIN && kind.type() == Type.COLOR) {
                     color = item;
                 }
             }
@@ -193,11 +197,23 @@ public class TemplateCraftListener implements Listener {
         if (marked.size() == 1 && sheets.isEmpty() && !ingredients.isEmpty()) {
             ItemStack template = marked.getFirst();
             Kind kind = Objects.requireNonNull(templates.kind(template));
-            if (!kind.reset() && ingredients.size() == 1 && ingredients.getFirst().getType() == Material.BONE_MEAL) {
-                return new Plan(templates.create(new Kind(kind.type(), true)), used);
+            if (kind.variant() == Variant.COPY) {
+                // The source item only lends its property, so it stays in the grid.
+                ItemStack copy = ingredients.size() == 1 ? templates.copyFrom(kind.type(), ingredients.getFirst()) : null;
+                if (copy == null) {
+                    return null;
+                }
+                List<Integer> consumed = new ArrayList<>(used);
+                consumed.remove(ingredientSlots.getFirst());
+                return new Plan(copy, consumed);
             }
-            if (kind.reset()) {
+            if (kind.variant() != Variant.PLAIN) {
                 return null;
+            }
+            Variant variant = ingredients.size() == 1 ? variantOf(ingredients.getFirst()) : null;
+            if (variant != null) {
+                return variant == Variant.COPY && !kind.type().isCopyable()
+                        ? null : new Plan(templates.create(new Kind(kind.type(), variant)), used);
             }
             List<Color> dyes = dyes(ingredients);
             if (kind.type() == Type.COLOR && dyes != null) {
@@ -210,10 +226,15 @@ public class TemplateCraftListener implements Listener {
             return null;
         }
         if (marked.isEmpty() && sheets.isEmpty()) {
-            return isNameResetCraft(ingredients) ? new Plan(templates.createNameReset(), used) : null;
+            Variant variant = nameTagVariant(ingredients);
+            return variant == null ? null : new Plan(templates.createNameTag(variant), used);
         }
         if (!marked.isEmpty() || sheets.isEmpty()) {
             return null;
+        }
+        if (ingredients.stream().anyMatch(item -> variantOf(item) != null)) {
+            Kind kind = directVariant(sheets.size(), ingredients);
+            return kind == null ? null : new Plan(templates.create(kind), used);
         }
         if (ingredients.isEmpty()) {
             if (sheets.stream().noneMatch(templates::isRenamedSheet)) {
@@ -237,22 +258,77 @@ public class TemplateCraftListener implements Listener {
             return null;
         }
         if (ingredients.size() == 1 && ingredients.getFirst().getType() == Material.GLOWSTONE_DUST) {
-            return new Plan(templates.create(new Kind(Type.GLINT, false)), used);
+            return new Plan(templates.create(new Kind(Type.GLINT, Variant.PLAIN)), used);
         }
         List<Color> dyes = dyes(ingredients);
         return dyes == null ? null : new Plan(templates.createColor(new ColorRecipe(List.of(dyes))), used);
     }
 
-    /** An unnamed ordinary name tag and bone meal; named tags are refused, so a name is never wiped by accident. */
-    private boolean isNameResetCraft(List<ItemStack> ingredients) {
-        if (ingredients.size() != 2) {
-            return false;
+    /** Bone meal bleaches into a Reset variant; an ink sac transcribes into a Copy variant. */
+    private static @Nullable Variant variantOf(ItemStack ingredient) {
+        return switch (ingredient.getType()) {
+            case BONE_MEAL -> Variant.RESET;
+            case INK_SAC -> Variant.COPY;
+            default -> null;
+        };
+    }
+
+    /**
+     * A Reset or Copy template crafted directly: a plain template's recipe plus one bone meal or ink sac. Its text
+     * doesn't matter, so renamed sheets count as blank.
+     */
+    private static @Nullable Kind directVariant(int sheets, List<ItemStack> ingredients) {
+        Variant variant = null;
+        List<ItemStack> base = new ArrayList<>();
+        for (ItemStack ingredient : ingredients) {
+            Variant added = variantOf(ingredient);
+            if (added == null) {
+                base.add(ingredient);
+            } else if (variant != null) {
+                return null;
+            } else {
+                variant = added;
+            }
         }
-        ItemStack first = ingredients.get(0), second = ingredients.get(1);
-        ItemStack tag = first.getType() == Material.BONE_MEAL ? second : first;
-        ItemStack boneMeal = tag == first ? second : first;
-        return boneMeal.getType() == Material.BONE_MEAL && tag.getType() == Material.NAME_TAG
-                && !tag.getItemMeta().hasCustomName() && !templates.isNameReset(tag);
+        Type type = baseType(sheets, base);
+        return type == null || variant == null || (variant == Variant.COPY && !type.isCopyable())
+                ? null : new Kind(type, variant);
+    }
+
+    /** The type of plain template the sheets and other ingredients make, regardless of the sheets' names. */
+    private static @Nullable Type baseType(int sheets, List<ItemStack> ingredients) {
+        if (sheets == 2 && ingredients.isEmpty()) {
+            return Type.LORE;
+        }
+        if (sheets != 1 || ingredients.isEmpty()) {
+            return null;
+        }
+        if (ingredients.size() == 1 && isNugget(ingredients.getFirst())) {
+            return Type.NAME;
+        }
+        if (ingredients.size() == 1 && ingredients.getFirst().getType() == Material.GLOWSTONE_DUST) {
+            return Type.GLINT;
+        }
+        return dyes(ingredients) != null ? Type.COLOR : null;
+    }
+
+    /**
+     * The variant an unnamed ordinary name tag crafts into with bone meal or an ink sac. Named tags are refused, so a
+     * name is never wiped by accident.
+     */
+    private @Nullable Variant nameTagVariant(List<ItemStack> ingredients) {
+        if (ingredients.size() != 2) {
+            return null;
+        }
+        for (int i = 0; i < 2; i++) {
+            ItemStack tag = ingredients.get(i);
+            Variant variant = variantOf(ingredients.get(1 - i));
+            if (variant != null && tag.getType() == Material.NAME_TAG && !tag.getItemMeta().hasCustomName()
+                    && templates.nameTagVariant(tag) == null) {
+                return variant;
+            }
+        }
+        return null;
     }
 
     private static boolean isNugget(ItemStack item) {

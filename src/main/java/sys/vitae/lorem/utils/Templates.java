@@ -1,5 +1,6 @@
 package sys.vitae.lorem.utils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -37,11 +38,46 @@ public final class Templates {
         public boolean hasText() {
             return this == NAME || this == LORE;
         }
+
+        /** Whether there is a Copy variant: glint is just on or off, so there's nothing to copy. */
+        public boolean isCopyable() {
+            return this != GLINT;
+        }
     }
 
-    public record Kind(Type type, boolean reset) {
+    /** Plain templates carry their property; Reset templates remove it; Copy templates take it off another item. */
+    public enum Variant {
+        PLAIN(null),
+        RESET(Component.translatable("controls.reset", "Reset")),
+        COPY(Component.translatable("key.keyboard.copy", "Copy"));
+
+        private final @Nullable Component label;
+
+        Variant(@Nullable Component label) {
+            this.label = label;
+        }
+
+        private @NonNull Component label(Component base) {
+            Component suffix = label;
+            return suffix == null ? Objects.requireNonNull(base)
+                    : Objects.requireNonNull(base.append(Component.text(" - ")).append(suffix));
+        }
+
+        private String id() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
+    public record Kind(Type type, Variant variant) {
+        public Kind {
+            if (variant == Variant.COPY && !type.isCopyable()) {
+                throw new IllegalArgumentException(type + " templates have no Copy variant");
+            }
+        }
+
         public String id() {
-            return (reset ? "reset_" : "") + type.name().toLowerCase(Locale.ROOT);
+            String id = type.name().toLowerCase(Locale.ROOT);
+            return variant == Variant.PLAIN ? id : variant.id() + "_" + id;
         }
     }
 
@@ -51,8 +87,6 @@ public final class Templates {
             Objects.requireNonNull(PersistentDataType.STRING);
     private static final @NonNull PersistentDataType<int[], int[]> COLOR_RECIPE_TYPE =
             Objects.requireNonNull(PersistentDataType.INTEGER_ARRAY);
-
-    private static final String NAME_RESET_ID = "reset";
 
     private final @NonNull NamespacedKey idKey;
     private final @NonNull NamespacedKey colorKey;
@@ -65,28 +99,37 @@ public final class Templates {
     }
 
     /**
-     * A name tag that removes a mob's custom name. It must not have a custom name itself, or vanilla would apply that
-     * instead, so its label is an item name.
+     * A name tag that removes a mob's custom name (Reset) or copies it onto an ordinary name tag (Copy). It must not
+     * have a custom name itself, or vanilla would apply that instead, so its label is an item name.
      */
-    public @NonNull ItemStack createNameReset() {
+    public @NonNull ItemStack createNameTag(Variant variant) {
+        if (variant == Variant.PLAIN) {
+            throw new IllegalArgumentException("Plain name tags are vanilla's");
+        }
         ItemStack tag = new ItemStack(Material.NAME_TAG);
         ItemMeta meta = tag.getItemMeta();
-        meta.itemName(Component.translatable("item.minecraft.name_tag", "Name Tag").append(Component.text(" - "))
-                .append(Component.translatable("controls.reset", "Reset")));
-        meta.getPersistentDataContainer().set(nameTagKey, PersistentDataType.STRING, NAME_RESET_ID);
+        meta.itemName(variant.label(Component.translatable("item.minecraft.name_tag", "Name Tag")));
+        meta.getPersistentDataContainer().set(nameTagKey, PersistentDataType.STRING, variant.id());
         meta.setEnchantmentGlintOverride(true);
         tag.setItemMeta(meta);
         return tag;
     }
 
-    /** Whether the item is a name-resetting name tag; one that was renamed since is an ordinary name tag. */
-    public boolean isNameReset(@Nullable ItemStack item) {
-        return item != null && hasNameResetId(item) && !item.getItemMeta().hasCustomName();
+    /**
+     * The variant of a resetting or copying name tag, or null for any other item. One that was renamed since is an
+     * ordinary name tag.
+     */
+    public @Nullable Variant nameTagVariant(@Nullable ItemStack item) {
+        if (item == null) {
+            return null;
+        }
+        Variant variant = storedNameTagVariant(item);
+        return variant != null && !item.getItemMeta().hasCustomName() ? variant : null;
     }
 
-    /** A renamed name-resetting tag as the ordinary name tag it now is; the item itself otherwise. */
-    public ItemStack withoutNameReset(ItemStack item) {
-        if (!hasNameResetId(item) || !item.getItemMeta().hasCustomName()) {
+    /** A renamed resetting or copying tag as the ordinary name tag it now is; the item itself otherwise. */
+    public ItemStack asOrdinaryNameTag(ItemStack item) {
+        if (storedNameTagVariant(item) == null || !item.getItemMeta().hasCustomName()) {
             return item;
         }
         ItemStack result = item.clone();
@@ -98,9 +141,17 @@ public final class Templates {
         return result;
     }
 
-    private boolean hasNameResetId(ItemStack item) {
-        return item.getType() == Material.NAME_TAG && item.getAmount() > 0
-                && NAME_RESET_ID.equals(item.getItemMeta().getPersistentDataContainer().get(nameTagKey, STRING_TYPE));
+    private @Nullable Variant storedNameTagVariant(ItemStack item) {
+        if (item.getType() != Material.NAME_TAG || item.getAmount() < 1) {
+            return null;
+        }
+        String id = item.getItemMeta().getPersistentDataContainer().get(nameTagKey, STRING_TYPE);
+        for (Variant variant : List.of(Variant.RESET, Variant.COPY)) {
+            if (variant.id().equals(id)) {
+                return variant;
+            }
+        }
+        return null;
     }
 
     public @Nullable Kind kind(@Nullable ItemStack item) {
@@ -109,8 +160,11 @@ public final class Templates {
         }
         String id = item.getItemMeta().getPersistentDataContainer().get(idKey, STRING_TYPE);
         for (Type type : Type.values()) {
-            for (boolean reset : new boolean[] {false, true}) {
-                Kind kind = new Kind(type, reset);
+            for (Variant variant : Variant.values()) {
+                if (variant == Variant.COPY && !type.isCopyable()) {
+                    continue;
+                }
+                Kind kind = new Kind(type, variant);
                 if (kind.id().equals(id)) {
                     return kind;
                 }
@@ -133,20 +187,16 @@ public final class Templates {
     }
 
     public @NonNull ItemStack create(Type type, List<? extends Component> text) {
-        return withText(create(new Kind(type, false)), text);
+        return withText(create(new Kind(type, Variant.PLAIN)), text);
     }
 
     public @NonNull ItemStack create(Kind kind) {
         ItemStack template = new ItemStack(Material.PAPER);
         ItemMeta meta = template.getItemMeta();
-        Component label = kind.type().label;
-        if (kind.reset()) {
-            label = label.append(Component.text(" - ")).append(Component.translatable("controls.reset", "Reset"));
-        }
         meta.itemName(Component.translatable("options.generic_value", "%s: %s",
-                Component.translatable("mco.template.name", "Template"), label));
+                Component.translatable("mco.template.name", "Template"), kind.variant().label(kind.type().label)));
         meta.getPersistentDataContainer().set(idKey, PersistentDataType.STRING, kind.id());
-        if (kind.type() == Type.GLINT && !kind.reset()) {
+        if (kind.type() == Type.GLINT && kind.variant() == Variant.PLAIN) {
             meta.setEnchantmentGlintOverride(true);
         }
         template.setItemMeta(meta);
@@ -154,7 +204,7 @@ public final class Templates {
     }
 
     public @NonNull ItemStack createColor(ColorRecipe recipe) {
-        ItemStack template = create(new Kind(Type.COLOR, false));
+        ItemStack template = create(new Kind(Type.COLOR, Variant.PLAIN));
         ItemMeta meta = template.getItemMeta();
         meta.getPersistentDataContainer().set(colorKey, PersistentDataType.INTEGER_ARRAY, recipe.encode());
         TextColor color = TextColor.color(recipe.apply(null).asRGB());
@@ -216,23 +266,49 @@ public final class Templates {
     public @Nullable ItemStack apply(ItemStack input, ItemStack template) {
         Kind kind = Objects.requireNonNull(kind(template));
         ItemMeta meta = input.getItemMeta();
-        if (meta == null) {
+        if (meta == null || kind.variant() == Variant.COPY) {
             return null;
         }
+        boolean reset = kind.variant() == Variant.RESET;
         switch (kind.type()) {
-            case NAME -> meta.customName(kind.reset() ? null : text(template).getFirst());
-            case LORE -> meta.lore(kind.reset() ? null : text(template));
-            case GLINT -> meta.setEnchantmentGlintOverride(kind.reset() ? null : true);
+            case NAME -> meta.customName(reset ? null : text(template).getFirst());
+            case LORE -> meta.lore(reset ? null : text(template));
+            case GLINT -> meta.setEnchantmentGlintOverride(reset ? null : true);
             case COLOR -> {
                 if (!(meta instanceof LeatherArmorMeta dyed)) {
                     return null;
                 }
-                dyed.setColor(kind.reset() ? null : colorRecipe(template).apply(dyed.isDyed() ? dyed.getColor() : null));
+                dyed.setColor(reset ? null : colorRecipe(template).apply(dyed.isDyed() ? dyed.getColor() : null));
             }
         }
         ItemStack result = input.clone();
         result.setItemMeta(meta);
         return result.isSimilar(input) ? null : result;
+    }
+
+    /**
+     * A plain template of the type holding the source's corresponding property, or null if the source has none.
+     * A name tag's formatting marker isn't part of its description.
+     */
+    public @Nullable ItemStack copyFrom(Type type, ItemStack source) {
+        ItemMeta meta = source.getItemMeta();
+        if (meta == null) {
+            return null;
+        }
+        return switch (type) {
+            case NAME -> meta.customName() instanceof Component name ? create(Type.NAME, List.of(name)) : null;
+            case LORE -> {
+                List<Component> original = meta.lore();
+                List<Component> lore = original == null ? new ArrayList<>() : new ArrayList<>(original);
+                if (source.getType() == Material.NAME_TAG) {
+                    lore.removeIf(NameTags.MARKER::equals);
+                }
+                yield lore.isEmpty() ? null : create(Type.LORE, lore);
+            }
+            case COLOR -> meta instanceof LeatherArmorMeta dyed && dyed.isDyed()
+                    ? createColor(ColorRecipe.of(dyed.getColor())) : null;
+            case GLINT -> null;
+        };
     }
 
     private static boolean isPaper(@NonNull ItemStack item) {
