@@ -37,7 +37,7 @@ public final class TextStyles {
     public static @Nullable TextDecoration decoration(Material material) {
         return switch (material) {
             case END_ROD -> TextDecoration.OBFUSCATED;
-            case GOLD_NUGGET -> TextDecoration.BOLD;
+            case COAL, CHARCOAL -> TextDecoration.BOLD;
             case STRING -> TextDecoration.STRIKETHROUGH;
             case STICK -> TextDecoration.UNDERLINED;
             case FEATHER -> TextDecoration.ITALIC;
@@ -82,6 +82,11 @@ public final class TextStyles {
     public static @NonNull List<@NonNull Component> color(List<? extends Component> lines,
             @Nullable TextColor color) {
         return map(lines, style -> style.color(color));
+    }
+
+    /** Whether any part of the text has explicit styling, even if it matches the context's defaults. */
+    public static boolean isFormatted(Component component) {
+        return !map(component, _ -> Style.empty()).equals(component);
     }
 
     /** A visual style shared by all nonempty text, or null for mixed formatting. */

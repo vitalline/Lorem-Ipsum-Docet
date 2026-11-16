@@ -10,10 +10,13 @@ Each occupied ingredient slot contributes one item, regardless of stack size.
 
 | Template | Recipe | Anvil effect |
 | --- | --- | --- |
-| Name | One unrenamed sheet of paper + one renamed name tag | Copies the stored name, including formatting |
+| Name | One renamed sheet of paper + any nugget (iron, gold or copper) | Copies the sheet's name, including formatting, as the item's name |
 | Lore | Paper only, with at least one renamed sheet | Copies the sheets' names as description lines, in grid reading order; unrenamed sheets contribute empty lines |
 | Glint | One unrenamed sheet of paper + glowstone dust | Forces enchantment shimmer without adding enchantments |
 | Color | One unrenamed sheet of paper + one or more dyes | Dyes items supported by Paper's leather/dyeable-armour metadata |
+
+The Name recipe mirrors vanilla's name tag recipe; an unrenamed sheet with a
+nugget still crafts a vanilla name tag.
 
 Put the target item in the anvil's first slot and a template in the second.
 Applying a template consumes one template and costs levels like a rename. Other
@@ -34,14 +37,14 @@ not a reset ingredient.
 
 ### Text colours, decorations, and fonts
 
-Craft a Name or Lore template with one of these ingredients. The same ingredient
+Craft a Name or Lore template with one of these ingredients. The same ingredients
 can be used on a sign's targeted side by right-clicking it.
 
 | Ingredient | Text effect |
 | --- | --- |
 | Dye | Replace text colour (signs retain native sign-dye colours) |
 | End rod | Toggle obfuscated text |
-| Gold nugget | Toggle bold |
+| Coal or charcoal | Toggle bold |
 | String | Toggle strikethrough |
 | Stick | Toggle underline |
 | Feather | Toggle italic |
@@ -58,6 +61,13 @@ Template names/lore have the usual italic default; signs do not.
 Several dyes can be mixed in one template craft. A Color template can also be
 crafted with a Name/Lore template to apply its preview colour to all of that
 template's text. Styling consumes the input template(s) and ingredients.
+
+Item tooltips show unformatted names in italics, so a name with explicitly
+default formatting (such as white italics) would look identical there, even
+though mobs display them differently. Name tags with any explicit formatting
+therefore get a grey `Custom` line (vanilla's translated label) after their other
+lore. It's added and removed automatically when the tag is renamed or a template
+is applied to it in an anvil.
 
 Water bottles must be ordinary drinkable water, without custom potion effects;
 other potions and splash/lingering water bottles are not accepted. The empty

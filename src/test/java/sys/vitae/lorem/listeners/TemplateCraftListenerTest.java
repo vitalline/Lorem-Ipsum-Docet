@@ -5,8 +5,10 @@ import static org.mockito.Mockito.*;
 import static sys.vitae.lorem.NonNullMockito.mock;
 import static sys.vitae.lorem.NonNullMockito.verify;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 import org.bukkit.Color;
 import org.bukkit.DyeColor;
@@ -32,10 +34,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.jspecify.annotations.NonNull;
 
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import sys.vitae.lorem.utils.ColorRecipe;
 import sys.vitae.lorem.utils.FormatCodes;
 import sys.vitae.lorem.utils.Templates;
@@ -44,6 +50,11 @@ import sys.vitae.lorem.utils.Templates.Type;
 import sys.vitae.lorem.utils.TextStyles;
 
 class TemplateCraftListenerTest {
+
+    /** Nested formatting, so every styling ingredient visibly changes something. */
+    private static final @NonNull List<@NonNull Component> STYLED = Objects.requireNonNull(List.of(
+            Component.text("Mob", NamedTextColor.BLUE).decorate(TextDecoration.BOLD)
+                    .append(Component.text(" name", NamedTextColor.GREEN).font(Key.key("alt")))));
 
     private Templates templates;
     private TemplateCraftListener listener;
@@ -73,15 +84,16 @@ class TemplateCraftListenerTest {
     }
 
     @Test
-    void createsNameAndGlintUsingTheirIngredients() {
-        ItemStack paper = sheet(null), nameTag = item(Material.NAME_TAG);
-        when(nameTag.getItemMeta().hasCustomName()).thenReturn(true);
-        when(nameTag.getItemMeta().customName()).thenReturn(Component.text("Name"));
+    void createsNameFromARenamedSheetAndAnyNuggetAndGlintFromGlowstone() {
         when(templates.create(Type.NAME, List.of(Component.text("Name")))).thenReturn(result);
-        assertSame(result, listener.plan(new ItemStack[] {paper, nameTag}).result());
+        for (Material nugget : List.of(Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.COPPER_NUGGET)) {
+            assertSame(result, listener.plan(new ItemStack[] {sheet(Component.text("Name")), item(nugget)}).result());
+            // Left to vanilla's name tag recipe.
+            assertNull(listener.plan(new ItemStack[] {sheet(null), item(nugget)}));
+        }
 
         when(templates.create(new Kind(Type.GLINT, false))).thenReturn(result);
-        assertSame(result, listener.plan(new ItemStack[] {paper, item(Material.GLOWSTONE_DUST)}).result());
+        assertSame(result, listener.plan(new ItemStack[] {sheet(null), item(Material.GLOWSTONE_DUST)}).result());
     }
 
     @Test
@@ -112,26 +124,50 @@ class TemplateCraftListenerTest {
 
     @Test
     void colorTemplateStylesNameAndLoreInsteadOfCopyingItsDescription() {
+        List<@NonNull Component> expected = TextStyles.color(STYLED, TextColor.color(Color.RED.asRGB()));
         for (Type type : List.of(Type.NAME, Type.LORE)) {
             ItemStack text = template(type, false), color = template(Type.COLOR, false);
-            List<@NonNull Component> original = List.of(
-                    Component.text("text").append(Component.text("tail", TextColor.color(0xFFFFFF))));
-            when(templates.text(text)).thenReturn(Objects.requireNonNull(original));
+            when(templates.text(text)).thenReturn(STYLED);
             when(templates.colorRecipe(color)).thenReturn(new ColorRecipe(List.of(List.of(Color.RED))));
-            when(templates.withText(text, TextStyles.color(original, TextColor.color(Color.RED.asRGB())))).thenReturn(result);
+            when(templates.withText(text, expected)).thenReturn(result);
             assertSame(result, listener.plan(new ItemStack[] {text, color}).result());
         }
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("stylings")
+    void ingredientsStyleNameAndLoreTemplatesAlike(List<Material> materials) {
+        List<@NonNull ItemStack> ingredients = materials.stream().map(TemplateCraftListenerTest::ingredient).toList();
+        List<Color> dyes = materials.stream().map(TextStyles::dye).filter(Objects::nonNull)
+                .map(dye -> Objects.requireNonNull(dye).getColor()).toList();
+        List<@NonNull Component> expected = dyes.isEmpty()
+                ? TextStyles.apply(STYLED, ingredients.getFirst(), true)
+                : TextStyles.color(STYLED, TextColor.color(new ColorRecipe(List.of(dyes)).apply(null).asRGB()));
+        assertNotEquals(STYLED, expected);
+
+        for (Type type : List.of(Type.NAME, Type.LORE)) {
+            ItemStack template = template(type, false);
+            when(templates.text(template)).thenReturn(STYLED);
+            when(templates.withText(template, expected)).thenReturn(result);
+            assertSame(result, listener.plan(grid(template, ingredients)).result());
+        }
+    }
+
+    static Stream<List<Material>> stylings() {
+        return Stream.concat(
+                Arrays.stream(DyeColor.values()).map(dye -> List.of(Material.valueOf(dye.name() + "_DYE"))),
+                Stream.of(List.of(Material.RED_DYE, Material.BLUE_DYE), List.of(Material.END_ROD),
+                        List.of(Material.COAL), List.of(Material.CHARCOAL), List.of(Material.STRING), List.of(Material.STICK),
+                        List.of(Material.FEATHER), List.of(Material.EXPERIENCE_BOTTLE), List.of(Material.BOOK),
+                        List.of(Material.OMINOUS_BOTTLE), List.of(Material.POTION)));
+    }
+
     @Test
-    void fontIngredientReplacesOverridesThroughoutTemplateText() {
+    void rejectsOtherIngredients() {
         ItemStack template = template(Type.LORE, false);
-        var original = List.of(FormatCodes.toComponent("\\hfirst\\isecond"));
-        when(templates.text(template)).thenReturn(Objects.requireNonNull(original));
-        ItemStack ingredient = item(Material.EXPERIENCE_BOTTLE);
-        when(templates.withText(template, TextStyles.apply(original, ingredient, true))).thenReturn(result);
-        assertSame(result, listener.plan(new ItemStack[] {template, ingredient}).result());
+        when(templates.text(template)).thenReturn(STYLED);
         assertNull(listener.plan(new ItemStack[] {template, item(Material.ENCHANTING_TABLE)}));
+        assertNull(listener.plan(new ItemStack[] {template, item(Material.RED_DYE), item(Material.COAL)}));
     }
 
     @Test
@@ -153,10 +189,7 @@ class TemplateCraftListenerTest {
             "LEFT", "RIGHT", "NUMBER_KEY", "SHIFT_LEFT", "SHIFT_RIGHT", "DROP", "CONTROL_DROP"})
     void takingWaterStyledTemplateLeavesOneEmptyBottleInTheGrid(ClickType click) {
         ItemStack template = template(Type.NAME, false);
-        ItemStack water = item(Material.POTION);
-        PotionMeta meta = mock(PotionMeta.class);
-        when(water.getItemMeta()).thenReturn(meta);
-        when(meta.getBasePotionType()).thenReturn(PotionType.WATER);
+        ItemStack water = ingredient(Material.POTION);
         var original = List.of(FormatCodes.toComponent("\\gName"));
         when(templates.text(template)).thenReturn(Objects.requireNonNull(original));
         when(templates.withText(template, TextStyles.apply(original, water, true))).thenReturn(result);
@@ -202,7 +235,7 @@ class TemplateCraftListenerTest {
         }
     }
 
-    private ItemStack template(Type type, boolean reset) {
+    private @NonNull ItemStack template(Type type, boolean reset) {
         ItemStack item = item(Material.PAPER);
         when(templates.kind(item)).thenReturn(new Kind(type, reset));
         return item;
@@ -215,6 +248,21 @@ class TemplateCraftListenerTest {
         when(templates.isBlankSheet(item)).thenReturn(name == null);
         when(item.getItemMeta().hasCustomName()).thenReturn(name != null);
         when(item.getItemMeta().customName()).thenReturn(name);
+        return item;
+    }
+
+    private static ItemStack[] grid(@NonNull ItemStack first, List<@NonNull ItemStack> rest) {
+        return Stream.concat(Stream.of(first), rest.stream()).toArray(ItemStack[]::new);
+    }
+
+    /** An item, with plain water for potions. */
+    private static @NonNull ItemStack ingredient(Material material) {
+        ItemStack item = item(material);
+        if (material == Material.POTION) {
+            PotionMeta meta = mock(PotionMeta.class);
+            when(item.getItemMeta()).thenReturn(meta);
+            when(meta.getBasePotionType()).thenReturn(PotionType.WATER);
+        }
         return item;
     }
 

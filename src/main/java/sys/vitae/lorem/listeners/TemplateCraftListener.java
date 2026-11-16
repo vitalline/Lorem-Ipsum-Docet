@@ -22,6 +22,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.Plugin;
+import org.jspecify.annotations.NonNull;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
@@ -176,9 +177,9 @@ public class TemplateCraftListener implements Listener {
                     color = item;
                 }
             }
-            return text != null && color != null ? new Plan(templates.withText(text,
-                    TextStyles.color(templates.text(text), TextColor.color(templates.colorRecipe(color).apply(null).asRGB()))),
-                    used) : null;
+            return text != null && color != null
+                    ? new Plan(templates.withText(text, color(templates.text(text), templates.colorRecipe(color))), used)
+                    : null;
         }
         if (marked.size() == 1 && sheets.isEmpty() && !ingredients.isEmpty()) {
             ItemStack template = marked.getFirst();
@@ -194,15 +195,8 @@ public class TemplateCraftListener implements Listener {
                 return new Plan(templates.createColor(templates.colorRecipe(template).append(dyes)), used);
             }
             if (kind.type().hasText()) {
-                List<? extends Component> text = templates.text(template);
-                if (dyes != null) {
-                    text = TextStyles.color(text, TextColor.color(new ColorRecipe(List.of(dyes)).apply(null).asRGB()));
-                } else if (ingredients.size() == 1 && TextStyles.isIngredient(ingredients.getFirst())) {
-                    text = TextStyles.apply(text, ingredients.getFirst(), true);
-                } else {
-                    return null;
-                }
-                return new Plan(templates.withText(template, text), used);
+                List<@NonNull Component> text = style(templates.text(template), ingredients);
+                return text == null ? null : new Plan(templates.withText(template, text), used);
             }
             return null;
         }
@@ -220,20 +214,44 @@ public class TemplateCraftListener implements Listener {
             }
             return new Plan(templates.create(Type.LORE, lore), used);
         }
+        if (sheets.size() == 1 && ingredients.size() == 1 && isNugget(ingredients.getFirst())) {
+            // Mirrors vanilla's name tag recipe; a blank sheet is left to that recipe.
+            ItemStack sheet = sheets.getFirst();
+            return templates.isRenamedSheet(sheet)
+                    ? new Plan(templates.create(Type.NAME, List.of(sheet.getItemMeta().customName())), used)
+                    : null;
+        }
         if (sheets.size() != 1 || !templates.isBlankSheet(sheets.getFirst())) {
             return null;
         }
-        if (ingredients.size() == 1) {
-            ItemStack ingredient = ingredients.getFirst();
-            if (ingredient.getType() == Material.NAME_TAG && ingredient.getItemMeta().hasCustomName()) {
-                return new Plan(templates.create(Type.NAME, List.of(ingredient.getItemMeta().customName())), used);
-            }
-            if (ingredient.getType() == Material.GLOWSTONE_DUST) {
-                return new Plan(templates.create(new Kind(Type.GLINT, false)), used);
-            }
+        if (ingredients.size() == 1 && ingredients.getFirst().getType() == Material.GLOWSTONE_DUST) {
+            return new Plan(templates.create(new Kind(Type.GLINT, false)), used);
         }
         List<Color> dyes = dyes(ingredients);
         return dyes == null ? null : new Plan(templates.createColor(new ColorRecipe(List.of(dyes))), used);
+    }
+
+    private static boolean isNugget(ItemStack item) {
+        return switch (item.getType()) {
+            case IRON_NUGGET, GOLD_NUGGET, COPPER_NUGGET -> true;
+            default -> false;
+        };
+    }
+
+    /** The text styled with the ingredients (several dyes are mixed), or null if they aren't a styling. */
+    private static List<@NonNull Component> style(List<? extends Component> text, List<ItemStack> ingredients) {
+        List<Color> dyes = dyes(ingredients);
+        if (dyes != null) {
+            return color(text, new ColorRecipe(List.of(dyes)));
+        }
+        if (ingredients.size() == 1 && TextStyles.isIngredient(ingredients.getFirst())) {
+            return TextStyles.apply(text, ingredients.getFirst(), true);
+        }
+        return null;
+    }
+
+    private static @NonNull List<@NonNull Component> color(List<? extends Component> text, ColorRecipe recipe) {
+        return TextStyles.color(text, TextColor.color(recipe.apply(null).asRGB()));
     }
 
     private static List<Color> dyes(List<ItemStack> ingredients) {

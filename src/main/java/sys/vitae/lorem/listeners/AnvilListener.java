@@ -14,6 +14,7 @@ import org.bukkit.plugin.Plugin;
 import net.kyori.adventure.text.Component;
 import sys.vitae.lorem.utils.FormatCodes;
 import sys.vitae.lorem.utils.FormattingAccess;
+import sys.vitae.lorem.utils.NameTags;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
@@ -26,6 +27,7 @@ import sys.vitae.lorem.utils.Templates.Type;
  * <p><b>Renaming:</b> escape sequences in the rename text are translated (see {@link FormatCodes}).
  * A rename consisting solely of formatting codes replaces the leading formatting codes of the item's existing custom name.
  * Items without a custom name aren't renamed at all in that case, just like renaming an item to its current name in vanilla.
+ * Name tags get a marker line while their name is formatted (see {@link NameTags}).
  *
  * <p>Typed templates in the second slot apply just their property, consuming one sheet.
  * Other than a Name template, these can be combined with renaming. They are priced like a rename.
@@ -53,8 +55,23 @@ public class AnvilListener implements Listener {
         Kind kind = templates.kind(addition);
         if (kind != null) {
             applyTemplate(event, input, addition, kind, formatting);
-        } else if (formatting) {
-            translateRename(event, input);
+        } else {
+            if (formatting) {
+                translateRename(event, input);
+            }
+            markNameTag(event);
+        }
+    }
+
+    /** Keeps the formatting marker of a renamed name tag in sync, also when the rename wasn't translated. */
+    private static void markNameTag(PrepareAnvilEvent event) {
+        ItemStack result = event.getResult();
+        if (result == null || result.isEmpty()) {
+            return;
+        }
+        ItemStack marked = NameTags.withMarker(result);
+        if (marked != result) {
+            event.setResult(marked);
         }
     }
 
@@ -83,8 +100,8 @@ public class AnvilListener implements Listener {
 
     /** Vanilla has no output for these ingredients, so the whole result (and its price) is built here. */
     private void applyTemplate(PrepareAnvilEvent event, ItemStack input, ItemStack sheet, Kind kind, boolean formatting) {
-        ItemStack out = templates.apply(input, sheet);
-        if (out == null) {
+        ItemStack applied = templates.apply(input, sheet);
+        if (applied == null) {
             return;
         }
         AnvilView view = event.getView();
@@ -92,9 +109,13 @@ public class AnvilListener implements Listener {
         Component name = resolveName(view.getRenameText(), oldName, formatting);
         boolean renamed = kind.type() != Type.NAME && !FormatCodes.sameText(name, oldName);
         if (renamed) {
-            ItemMeta meta = out.getItemMeta();
+            ItemMeta meta = applied.getItemMeta();
             meta.customName(name);
-            out.setItemMeta(meta);
+            applied.setItemMeta(meta);
+        }
+        ItemStack out = NameTags.withMarker(applied);
+        if (out.isSimilar(input)) {
+            return; // e.g. a Lore reset on a name tag whose only lore is the marker
         }
 
         // Like a rename: 1 level per change on top of the prior-work penalty, which isn't increased, and never "Too Expensive!".

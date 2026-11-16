@@ -74,7 +74,7 @@ class ItemConsumptionTest {
     void ordinaryIngredientsAreConsumedWithoutCreatingBottles() {
         ItemStack ingredient = mock(ItemStack.class), remaining = mock(ItemStack.class);
         Player player = mock(Player.class);
-        when(ingredient.getType()).thenReturn(Material.GOLD_NUGGET);
+        when(ingredient.getType()).thenReturn(Material.COAL);
         when(ingredient.getAmount()).thenReturn(1);
         assertNull(ItemConsumption.consumeOne(ingredient, player));
         when(ingredient.getAmount()).thenReturn(3);

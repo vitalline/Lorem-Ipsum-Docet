@@ -49,7 +49,8 @@ class TextStylesTest {
     @ParameterizedTest
     @CsvSource({
             "END_ROD, OBFUSCATED",
-            "GOLD_NUGGET, BOLD",
+            "COAL, BOLD",
+            "CHARCOAL, BOLD",
             "STRING, STRIKETHROUGH",
             "STICK, UNDERLINED",
             "FEATHER, ITALIC"
@@ -113,6 +114,18 @@ class TextStylesTest {
         assertEquals(NamedTextColor.RED, styled.color());
         assertEquals(TextDecoration.State.TRUE, styled.decoration(TextDecoration.BOLD));
         assertEquals("options.generic_value", styled.key());
+    }
+
+    @Test
+    void formattingIncludesNestedTextTranslationArgumentsAndExplicitDefaults() {
+        Component plain = Component.translatable("options.generic_value", Component.text("argument"), Component.text("value"))
+                .append(Component.text("tail"));
+        assertFalse(TextStyles.isFormatted(plain));
+        assertTrue(TextStyles.isFormatted(plain.append(Component.text("styled").font(Key.key("alt")))));
+        assertTrue(TextStyles.isFormatted(Component.translatable("options.generic_value",
+                Component.text("argument", NamedTextColor.RED), Component.text("value"))));
+        // Explicit default formatting looks unformatted in item tooltips, but not on a mob.
+        assertTrue(TextStyles.isFormatted(Component.text("name", NamedTextColor.WHITE).decorate(TextDecoration.ITALIC)));
     }
 
     @Test

@@ -4,7 +4,10 @@ import static org.mockito.Mockito.*;
 import static sys.vitae.lorem.NonNullMockito.mock;
 import static sys.vitae.lorem.NonNullMockito.verify;
 
+import java.util.List;
+
 import org.bukkit.GameMode;
+import org.bukkit.Material;
 import org.bukkit.Server;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import sys.vitae.lorem.utils.FormatCodes;
+import sys.vitae.lorem.utils.NameTags;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
@@ -64,7 +68,7 @@ class AnvilListenerTest {
     @Test
     void ordinarySurvivalKeepsLiteralEscapesButCreativeTranslatesThem() {
         listener.onPrepareAnvil(event);
-        verify(event, never()).getResult();
+        verify(event, never()).setResult(any());
 
         when(player.getGameMode()).thenReturn(GameMode.CREATIVE);
         when(view.getRenameText()).thenReturn("\\cRed");
@@ -109,6 +113,48 @@ class AnvilListenerTest {
         verify(event).setResult(result);
         verify(result, never()).getItemMeta();
         verify(view).setRepairCost(1);
+    }
+
+    @Test
+    void plainRenameRemovesTheNameTagMarkerEvenWithoutFormattingAccess() {
+        Component lore = Component.text("lore");
+        ItemStack vanilla = nameTag(Component.text("Plain"), List.of(lore, NameTags.MARKER));
+        when(event.getResult()).thenReturn(vanilla);
+
+        listener.onPrepareAnvil(event);
+        ItemStack marked = vanilla.clone();
+        verify(marked.getItemMeta()).lore(List.of(lore));
+        verify(event).setResult(marked);
+    }
+
+    @Test
+    void templatesSyncTheNameTagMarkerButSkipResultsThatOnlyRestoreIt() {
+        when(templates.kind(addition)).thenReturn(new Kind(Type.NAME, false));
+        ItemStack applied = nameTag(Component.text("Mob", NamedTextColor.RED), null);
+        when(templates.apply(input, addition)).thenReturn(applied);
+
+        listener.onPrepareAnvil(event);
+        ItemStack marked = applied.clone();
+        verify(marked.getItemMeta()).lore(List.of(NameTags.MARKER));
+        verify(event).setResult(marked);
+
+        clearInvocations(event, view);
+        when(marked.isSimilar(input)).thenReturn(true);
+        listener.onPrepareAnvil(event);
+        verify(event, never()).setResult(any());
+        verify(view, never()).setRepairCost(anyInt());
+    }
+
+    /** A name tag whose (single) clone has the given name and lore. */
+    private static ItemStack nameTag(Component name, List<Component> lore) {
+        ItemStack tag = mock(ItemStack.class), copy = mock(ItemStack.class);
+        ItemMeta meta = mock(ItemMeta.class);
+        when(tag.getType()).thenReturn(Material.NAME_TAG);
+        when(tag.clone()).thenReturn(copy);
+        when(copy.getItemMeta()).thenReturn(meta);
+        when(meta.customName()).thenReturn(name);
+        when(meta.lore()).thenReturn(lore);
+        return tag;
     }
 
     @Test

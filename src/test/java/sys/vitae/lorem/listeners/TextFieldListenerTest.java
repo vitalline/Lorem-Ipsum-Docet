@@ -169,7 +169,7 @@ class TextFieldListenerTest {
                 List.of(Component.text("text"), Component.empty(), Component.empty(), Component.empty())));
         when(sign.getTargetSide(player)).thenReturn(side);
         ItemStack ingredient = mock(ItemStack.class);
-        when(ingredient.getType()).thenReturn(Material.GOLD_NUGGET);
+        when(ingredient.getType()).thenReturn(Material.COAL);
         PlayerInteractEvent event = mock(PlayerInteractEvent.class);
         when(event.getPlayer()).thenReturn(player);
         when(event.getClickedBlock()).thenReturn(block);
