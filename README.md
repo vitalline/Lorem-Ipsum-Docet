@@ -161,6 +161,26 @@ dye, using vanilla brightness-preserving mixing and rounding. Repeated dyes
 within a recipe retain their weight; applying the template repeatedly dyes the
 item repeatedly. An undyed target contributes no initial color.
 
+### Placed blocks
+
+Vanilla keeps a container's custom name when it's placed and broken, but drops
+its description and glint override. Blocks with a block entity (shulker boxes,
+chests, barrels, banners, and so on) placed from an item with either now drop
+it back with them, whether broken by a player, a piston, a fluid, or an
+explosion. Properties the drop already has are kept.
+
+- Items spilling out of a broken container are untouched: they keep everything
+  they had. Only an item identical to what the block would have dropped (same
+  name, contents and other data) can get the block's properties.
+- Creative breaks don't drop the block itself, so there is nothing to restore.
+- Explosions merge identical drops into one stack, which is split into the
+  restored items and the remainder. As explosions report no drops, the block's
+  item is matched among the items spawned where the explosion's blocks were.
+  Items identical to it that spill out of any exploded block (a plain chest
+  burning in a furnace beside an exploding chest, say) are counted off first,
+  so a block whose own drop was destroyed passes nothing on. Contents generated
+  only on breaking, as in unopened loot chests, can't be counted.
+
 ### Identification and translation
 
 Templates use the plugin-namespaced persistent string key `template_id`:
@@ -172,6 +192,9 @@ copied color is stored first, as `0` followed by its RGB value.
 Name reset and copy tags use the persistent string key `name_tag_id` with the
 value `reset` or `copy`, and have no custom name, so vanilla never applies them
 as a name.
+Placed blocks keep their item's lore as Adventure JSON under the persistent
+string-list key `placed_lore`, and its glint override under the boolean key
+`placed_glint`.
 Names and lore are presentation/payload, not template identification.
 
 Display names use vanilla client translations, without a resource pack:
@@ -221,5 +244,5 @@ including with Escape; Escape is not a separate server-visible cancel action.
 ## Tests
 
 Run `mvn test` for template recipes, property isolation, resets, copies, color
-replay, whole-text styling, name reset and copy tags, permission overrides, and
-sign-editing regressions.
+replay, whole-text styling, name reset and copy tags, permission overrides,
+sign-editing regressions, and placed-block drops.
