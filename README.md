@@ -214,8 +214,9 @@ grants or denials override those defaults, including for Creative/operators.
 Crafted templates and ingredient-based styling do not require this permission.
 
 Existing escape syntax is as follows: `\0`-`\f` and `\xRRGGBB` for colors,
-`\k`-`\o` for decorations, `\g`/`\h`/`\i`/`\j` for fonts, `\r` to reset,
-`\\` for a literal backslash, and `\s` through `\w` for Unicode code points.
+`\g`/`\h`/`\i`/`\j` for fonts, `\k`-`\o` for decorations, `\p` to reset
+decorations only, `\q` to reset color only, and `\r` to reset all formatting.
+Use `\s` through `\w` for Unicode code points, and `\\` for a literal backslash.
 Book-and-quill text stays raw until signing; book titles cannot retain fonts.
 
 ### Renaming formatted items

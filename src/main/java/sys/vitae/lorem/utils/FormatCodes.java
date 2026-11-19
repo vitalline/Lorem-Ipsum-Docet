@@ -26,15 +26,18 @@ import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
  * <p>Escape sequences (specifier letters and hex digits are case-insensitive, like vanilla's {@code §} codes):
  * <ul>
  *   <li>{@code \0}-{@code \9}, {@code \a}-{@code \f} - colors; {@code \xRRGGBB} - a hex color</li>
- *   <li>{@code \k}-{@code \o} - obfuscated, bold, strikethrough, underlined, italic</li>
  *   <li>{@code \g} - enchanting table (SGA) font, {@code \h} - Unifont, {@code \i} - illager runes,
- *       {@code \j} - the regular font</li>
+ *       {@code \j} - regular font</li>
+ *   <li>{@code \k} - obfuscated, {@code \l} - bold, {@code \m} - strikethrough, {@code \n} - underlined,
+ *       {@code \o} - italic</li>
+ *   <li>{@code \p} - reset decorations; {@code \q} - reset color</li>
  *   <li>{@code \r} - reset: no color, decorations or font</li>
  *   <li>{@code \sXX}, {@code \tXXX}, <code>&#92;uXXXX</code>, {@code \vXXXXX}, {@code \wXXXXXX} -
  *       the Unicode character with that (hexadecimal) code point; {@code \sA7} is a literal {@code §}</li>
  *   <li>{@code \\} - a literal {@code \}</li>
  * </ul>
- * Like legacy {@code §} codes, a color (or reset) turns off all decorations. Fonts are only changed by font codes and reset.
+ * Like legacy {@code §} codes, setting a color turns off all decorations. {@code \p} turns off decorations,
+ * {@code \q} clears the color, and fonts are only changed by font codes and reset.
  * A {@code \} that doesn't start a valid sequence is kept as-is.
  */
 public final class FormatCodes {
@@ -61,6 +64,8 @@ public final class FormatCodes {
     private static final List<@NonNull TextDecoration> DECORATIONS = List.of(
             TextDecoration.OBFUSCATED, TextDecoration.BOLD, TextDecoration.STRIKETHROUGH,
             TextDecoration.UNDERLINED, TextDecoration.ITALIC);
+    private static final char STYLE_RESET = 'p';
+    private static final char COLOR_RESET = 'q';
     private static final char RESET = 'r';
     /** Unicode escape specifiers, by digit count: {@code s} takes 2 hex digits, ..., {@code w} takes 6. */
     private static final String UNICODE_SPECIFIERS = "stuvw";
@@ -75,6 +80,8 @@ public final class FormatCodes {
     private record ColorCode(TextColor color) implements Code {}
     private record DecorationCode(TextDecoration decoration) implements Code {}
     private record FontCode(Key font) implements Code {} // null: the regular font
+    private record StyleResetCode() implements Code {}
+    private record ColorResetCode() implements Code {}
     private record ResetCode() implements Code {}
 
     /** A recognized escape sequence: either a {@link Code} or the text it stands for. */
@@ -92,6 +99,8 @@ public final class FormatCodes {
                 case ColorCode c -> new State(c.color(), Set.of(), true, font);
                 case DecorationCode d -> new State(color, with(on, d.decoration()), explicit, font);
                 case FontCode f -> new State(color, on, explicit, f.font());
+                case StyleResetCode _ -> new State(color, Set.of(), true, font);
+                case ColorResetCode _ -> new State(null, on, explicit, font);
                 case ResetCode _ -> new State(null, Set.of(), true, null);
             };
         }
@@ -261,6 +270,10 @@ public final class FormatCodes {
             return new Escape(new FontCode(FONTS.get(index)), 2);
         } else if (specifier == DEFAULT_FONT_CODE) {
             return new Escape(new FontCode(null), 2);
+        } else if (specifier == STYLE_RESET) {
+            return new Escape(new StyleResetCode(), 2);
+        } else if (specifier == COLOR_RESET) {
+            return new Escape(new ColorResetCode(), 2);
         } else if (specifier == RESET) {
             return new Escape(new ResetCode(), 2);
         } else if (specifier == HEX_COLOR) {
@@ -305,15 +318,18 @@ public final class FormatCodes {
     /** Adds the codes that turn the {@code from} look into the {@code to} look. */
     private static void addTransition(Look from, Look to, List<Object> pieces) {
         Look current = from;
-        // Decorations can only be turned off by a color or reset code, which turns off all of them.
-        if (!sameColor(from.color(), to.color()) || !to.on().containsAll(from.on())) {
+        if (!sameColor(from.color(), to.color())) {
             if (to.color() != null) {
                 pieces.add(new ColorCode(to.color()));
                 current = new Look(to.color(), Set.of(), from.font());
             } else {
-                pieces.add(new ResetCode());
-                current = new Look(null, Set.of(), null);
+                pieces.add(new ColorResetCode());
+                current = new Look(null, from.on(), from.font());
             }
+        }
+        if (!to.on().containsAll(current.on())) {
+            pieces.add(new StyleResetCode());
+            current = new Look(current.color(), Set.of(), current.font());
         }
         if (!Objects.equals(current.font(), to.font())) {
             pieces.add(new FontCode(to.font()));
@@ -328,9 +344,25 @@ public final class FormatCodes {
     private static String render(List<Object> pieces, boolean legacy) {
         StringBuilder raw = new StringBuilder();
         BitSet literalEscapes = new BitSet();
+        State state = State.INITIAL;
         for (Object piece : pieces) {
             if (piece instanceof Code code) {
-                appendCode(raw, code, legacy);
+                if (legacy && code instanceof StyleResetCode) {
+                    raw.append(SECTION).append(RESET);
+                    if (state.color() != null) {
+                        appendCode(raw, new ColorCode(state.color()), true);
+                    }
+                } else if (legacy && code instanceof ColorResetCode) {
+                    raw.append(SECTION).append(RESET);
+                    for (TextDecoration decoration : DECORATIONS) {
+                        if (state.on().contains(decoration)) {
+                            appendCode(raw, new DecorationCode(decoration), true);
+                        }
+                    }
+                } else {
+                    appendCode(raw, code, legacy);
+                }
+                state = state.apply(code);
                 continue;
             }
             for (char c : ((String) piece).toCharArray()) {
@@ -381,6 +413,16 @@ public final class FormatCodes {
             case FontCode(Key font) -> {
                 if (!legacy) {
                     out.append(prefix).append(font == null ? DEFAULT_FONT_CODE : FONT_CODES.charAt(FONTS.indexOf(font)));
+                }
+            }
+            case StyleResetCode() -> {
+                if (!legacy) {
+                    out.append(prefix).append(STYLE_RESET);
+                }
+            }
+            case ColorResetCode() -> {
+                if (!legacy) {
+                    out.append(prefix).append(COLOR_RESET);
                 }
             }
             case ResetCode() -> out.append(prefix).append(RESET);
