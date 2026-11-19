@@ -18,6 +18,10 @@ Each occupied ingredient slot contributes one item, regardless of stack size.
 | Glint | One unrenamed sheet of paper + glowstone dust | Forces enchantment shimmer without adding enchantments |
 | Color | One unrenamed sheet of paper + one or more dyes | Dyes items supported by Paper's leather/dyeable-armor metadata |
 
+(NB: In game, as well as in the Player Guide, Lore, Glint and Color templates
+are called Description, Glowing and Colors. For further details, see
+[Identification and translation](#identification-and-translation).)
+
 The Name recipe mirrors vanilla's name tag recipe; an unrenamed sheet with a
 nugget still crafts a vanilla name tag.
 

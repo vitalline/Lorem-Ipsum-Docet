@@ -46,12 +46,12 @@ blank paper in the recipe makes an empty line.
 
 Add **bone meal** to a template recipe to make its **Reset** version, or craft
 an existing plain template with bone meal. Use Reset templates in an anvil as
-usual to remove that property. A Color reset restores leather armor's default
-color; a Glowing reset removes the override (the item may still shimmer if it
-has enchantments).
+usual to remove their property. A Colors Reset restores leather armor's default
+color; a Glowing Reset removes the forced glint (enchanted items may still
+shimmer).
 
 Add an **ink sac** to a Name, Description, or Colors template recipe to make a
-**Copy** template. Glint cannot be copied. To use one, craft it with exactly
+**Copy** template. Glowing cannot be copied. To use one, craft it with exactly
 one item that has the property you want. The source stays in the grid; the
 result is a plain template holding the copied property. Copy templates do not
 work in an anvil.
@@ -72,8 +72,8 @@ With only blank paper, the template is duplicated instead.
 Rename a Name or Description template in an anvil to replace the name, or the
 whole description, that it applies. This works like renaming an item, treating
 all of a description as its name: plain text keeps a style shared by all of it,
-formatting codes alone restyle every line, and escape codes need the formatting
-permission.
+a rename made only of escape codes restyles every line, and escape codes need
+the `loremipsum.format` permission.
 
 ## Color and style
 
@@ -82,7 +82,7 @@ permission.
 Put an existing Colors template and one or more dyes in the crafting grid to
 append another dyeing step; its swatch and hex value preview the result. In an
 anvil, the template applies those steps to the leather armor's existing color.
-Reapplying it dyes the armor again. Color templates also work as an ingredient
+Reapplying it dyes the armor again. Colors templates also work as an ingredient
 with a Name or Description template to color all of that template's text.
 
 ### Name and Description text
@@ -153,10 +153,10 @@ settings can override these defaults.
 
 The codes are case-insensitive. On signs, authorized players can use them while
 editing; holding Shift opens a plain-text edit instead. Players without the
-permission edit plain text. Signed books translate escapes in their pages and
+permission edit plain text. Signed books apply escape codes in their pages and
 title; fonts do not apply to book titles.
 
-## Placed containers
+## Placed blocks
 
 Place a block-entity item (such as a chest, barrel, shulker box, or banner) that
 has a Description or Glowing template applied, and those properties are
