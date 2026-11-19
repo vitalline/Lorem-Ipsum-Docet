@@ -3,6 +3,9 @@
 A Paper plugin for item templates and text customization. Build with Java 25 and
 `mvn package`; the plugin JAR is written to `plugins`.
 
+For crafting recipes and player-facing instructions, see the
+[Player Guide](PLAYER_GUIDE.md).
+
 ## Templates
 
 All recipes below are shapeless and work in either crafting grid when they fit.
