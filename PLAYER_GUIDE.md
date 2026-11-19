@@ -1,8 +1,13 @@
 # Player Guide
 
-Lorem Ipsum Docet lets you make templates for item names, descriptions, glint,
-and color; copy or clear those properties; style text and signs; and work with
-formatted names. There are no commands.
+Lorem Ipsum Docet is a server plugin for customizing item text and appearance.
+It adds templates for item names, descriptions, glint, and color; ways to copy
+or clear those properties; ingredient-based styling for text and signs; and
+escape codes for formatting item text, signs, and books. There are no commands.
+
+The plugin's name plays on the *lorem ipsum* placeholder text. Reading *lorem*
+as a mock-Latin form of "lore" (Minecraft's term for item descriptions), it
+means roughly "it teaches lore itself".
 
 ## Quick start
 
@@ -133,12 +138,14 @@ inventory). In Creative, the special tag is kept. Resetting another player's
 tamed animal is not allowed; only its owner can do that. Renaming a special
 tag in an anvil turns it into an ordinary name tag.
 
-## Formatted names, signs, and books
+## Escape codes
 
-In an anvil rename field, use backslash escape codes to add formatting. The
-`loremipsum.format` permission is required: by default Creative players and
-operators have it, while regular Survival players do not. Server permission
-settings can override these defaults.
+In an anvil rename field, use backslash escape codes to add formatting. Since
+Name and Description templates are made from renamed paper, that formatting
+carries into the names and descriptions they apply. The `loremipsum.format`
+permission is required: by default Creative players and operators have it,
+while regular Survival players do not. Server permission settings can override
+these defaults.
 
 | Code | Effect |
 | --- | --- |

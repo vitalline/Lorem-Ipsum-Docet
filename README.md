@@ -1,10 +1,13 @@
 # Lorem Ipsum Docet
 
-A Paper plugin for item templates and text customization. Build with Java 25 and
-`mvn package`; the development JAR is written to `target` and overwritten on
-every build. Run `mvn package -Prelease` to publish a finished version to
-`plugins`; this fails if that version's JAR already exists there, so bump the
-version first.
+A Paper plugin for item templates and text customization. Its name plays on the
+*lorem ipsum* placeholder text: reading *lorem* as a mock-Latin form of "lore"
+(Minecraft's term for item descriptions), it means roughly "it teaches lore itself".
+
+Build with Java 25 and `mvn package`; the development JAR is written to `target`
+and overwritten on every build. Run `mvn package -Prelease` to publish a finished
+version to `plugins`; this fails if that version's JAR already exists there,
+so bump the version first.
 
 For crafting recipes and player-facing instructions, see the
 [Player Guide](PLAYER_GUIDE.md).
