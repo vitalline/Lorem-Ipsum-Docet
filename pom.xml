@@ -67,10 +67,71 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.5.1</version>
                 <configuration>
-                    <outputDirectory>${project.basedir}/plugins</outputDirectory>
                     <forceCreation>true</forceCreation>
                 </configuration>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Publishes the finished JAR to plugins/; never overwrites an existing version. -->
+        <profile>
+            <id>release</id>
+            <properties>
+                <release.jar>${project.basedir}/plugins/${project.build.finalName}.jar</release.jar>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>3.6.2</version>
+                        <executions>
+                            <execution>
+                                <id>refuse-existing-release</id>
+                                <phase>validate</phase>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireFilesDontExist>
+                                            <files>
+                                                <file>${release.jar}</file>
+                                            </files>
+                                            <message>${release.jar} already exists. Bump the version in pom.xml before releasing, or delete the JAR manually to replace it.</message>
+                                        </requireFilesDontExist>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <version>3.3.1</version>
+                        <executions>
+                            <execution>
+                                <id>copy-release-jar</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>copy-resources</goal>
+                                </goals>
+                                <configuration>
+                                    <outputDirectory>${project.basedir}/plugins</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.build.directory}</directory>
+                                            <includes>
+                                                <include>${project.build.finalName}.jar</include>
+                                            </includes>
+                                            <filtering>false</filtering>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

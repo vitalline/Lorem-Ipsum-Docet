@@ -1,7 +1,10 @@
 # Lorem Ipsum Docet
 
 A Paper plugin for item templates and text customization. Build with Java 25 and
-`mvn package`; the plugin JAR is written to `plugins`.
+`mvn package`; the development JAR is written to `target` and overwritten on
+every build. Run `mvn package -Prelease` to publish a finished version to
+`plugins`; this fails if that version's JAR already exists there, so bump the
+version first.
 
 For crafting recipes and player-facing instructions, see the
 [Player Guide](PLAYER_GUIDE.md).
