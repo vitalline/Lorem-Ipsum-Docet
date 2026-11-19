@@ -36,10 +36,16 @@ public final class RecipeRegistry implements Listener {
     private static final List<@NonNull Material> DYES = Arrays.stream(DyeColor.values())
             .map(dye -> Material.valueOf(dye.name() + "_DYE")).toList();
 
+    /** A base recipe, unlocked by holding a sheet and any of its ingredients, and its Reset and Copy entries. */
+    private record Base(String key, List<Material> ingredients, String reset, @Nullable String copy) {}
+
     private final Plugin plugin;
     private final Templates templates;
     private final List<ShapedRecipe> entries = new ArrayList<>();
     private final Map<String, NamespacedKey> registered = new HashMap<>();
+    private final List<Base> bases = new ArrayList<>();
+    private final EnumSet<Material> triggers =
+            EnumSet.of(Material.PAPER, Material.BONE_MEAL, Material.INK_SAC, Material.NAME_TAG);
 
     public RecipeRegistry(Plugin plugin, Templates templates) {
         this.plugin = plugin;
@@ -47,15 +53,18 @@ public final class RecipeRegistry implements Listener {
     }
 
     public void registerAll() {
-        registerNameTemplates();
-        registerTemplate("template_lore", "template_lore",
+        registerBase("template_name", "", Type.NAME, templates.create(Type.NAME, List.of(Component.text("Name"))),
+                NUGGETS, true);
+        registerBase("template_lore", "", Type.LORE,
                 templates.create(Type.LORE, List.of(Component.text("Description"), Component.empty())),
-                List.of(Material.PAPER), null, true);
-        registerVariants("template_lore", "", Type.LORE, List.of(Material.PAPER));
-        registerTemplate("template_glint", "template_glint", variant(Type.GLINT, Variant.PLAIN),
-                List.of(Material.GLOWSTONE_DUST), null, false);
-        registerVariants("template_glint", "", Type.GLINT, List.of(Material.GLOWSTONE_DUST));
-        registerColorTemplates();
+                List.of(Material.PAPER), true);
+        registerBase("template_glint", "", Type.GLINT, variant(Type.GLINT, Variant.PLAIN),
+                List.of(Material.GLOWSTONE_DUST), false);
+        for (Material material : DYES) {
+            var dye = Objects.requireNonNull(TextStyles.dye(material));
+            registerBase("template_color", dyeSuffix(material), Type.COLOR,
+                    templates.createColor(new ColorRecipe(List.of(List.of(dye.getColor())))), List.of(material), false);
+        }
         register("nametag_reset", "nametag_reset", templates.createNameTag(Variant.RESET),
                 ItemStack.of(Material.NAME_TAG), List.of(Material.BONE_MEAL), null);
         register("nametag_copy", "nametag_copy", templates.createNameTag(Variant.COPY),
@@ -81,11 +90,7 @@ public final class RecipeRegistry implements Listener {
 
     @EventHandler
     public void onInventoryChange(PlayerInventorySlotChangeEvent event) {
-        Material material = event.getNewItemStack().getType();
-        if (switch (material) {
-            case PAPER, GLOWSTONE_DUST, BONE_MEAL, INK_SAC, NAME_TAG -> true;
-            default -> DYES.contains(material);
-        }) {
+        if (triggers.contains(event.getNewItemStack().getType())) {
             discover(event.getPlayer());
         }
     }
@@ -95,8 +100,7 @@ public final class RecipeRegistry implements Listener {
             return;
         }
         var materials = EnumSet.noneOf(Material.class);
-        boolean blankPaper = false;
-        boolean renamedPaper = false;
+        boolean sheet = false;
         boolean unnamedTag = false;
         for (ItemStack item : player.getInventory().getContents()) {
             if (item == null || item.isEmpty()) {
@@ -105,27 +109,18 @@ public final class RecipeRegistry implements Listener {
             Material material = Objects.requireNonNull(item.getType());
             materials.add(material);
             if (material == Material.PAPER) {
-                blankPaper |= templates.isBlankSheet(item);
-                renamedPaper |= templates.isRenamedSheet(item);
+                sheet |= templates.isSheet(item);
             } else if (material == Material.NAME_TAG) {
                 unnamedTag |= !item.getItemMeta().hasCustomName() && templates.nameTagVariant(item) == null;
             }
         }
 
         @NonNull List<NamespacedKey> pending = new ArrayList<>();
-        if (renamedPaper) {
-            for (Material nugget : NUGGETS) {
-                queue(player, pending, nameKey(nugget));
-            }
-            queue(player, pending, "template_lore");
-        }
-        if (blankPaper) {
-            if (materials.contains(Material.GLOWSTONE_DUST)) {
-                queue(player, pending, "template_glint");
-            }
-            for (Material dye : DYES) {
-                if (materials.contains(dye)) {
-                    queue(player, pending, "template_color" + dyeSuffix(dye));
+        if (sheet) {
+            // Whether the sheet is blank or renamed doesn't matter: the book's example shows which one to use.
+            for (Base base : bases) {
+                if (base.ingredients().stream().anyMatch(materials::contains)) {
+                    queue(player, pending, base.key());
                 }
             }
         }
@@ -140,23 +135,13 @@ public final class RecipeRegistry implements Listener {
             return;
         }
         @NonNull List<NamespacedKey> variants = new ArrayList<>();
-        if (NUGGETS.stream().anyMatch(nugget -> knows(player, nameKey(nugget)))) {
-            queueVariants(player, variants, "template_name", "", reset, copy);
-        }
-        if (knows(player, "template_lore")) {
-            queueVariants(player, variants, "template_lore", "", reset, copy);
-        }
-        if (knows(player, "template_glint")) {
-            queueVariants(player, variants, "template_glint", "", reset, false);
-        }
-        for (Material dye : DYES) {
-            String suffix = dyeSuffix(dye);
-            if (knows(player, "template_color" + suffix)) {
-                queueVariants(player, variants, "template_color", suffix, reset, copy);
+        for (Base base : bases) {
+            if (knows(player, base.key())) {
+                queueVariants(player, variants, base.reset(), base.copy(), reset, copy);
             }
         }
         if (unnamedTag) {
-            queueVariants(player, variants, "nametag", "", reset, copy);
+            queueVariants(player, variants, "nametag_reset", "nametag_copy", reset, copy);
         }
         if (!variants.isEmpty()) {
             player.discoverRecipes(variants);
@@ -175,50 +160,32 @@ public final class RecipeRegistry implements Listener {
         }
     }
 
-    private void queueVariants(Player player, List<NamespacedKey> pending, String group, String suffix,
+    private void queueVariants(Player player, List<NamespacedKey> pending, String resetKey, @Nullable String copyKey,
             boolean reset, boolean copy) {
         if (reset) {
-            queue(player, pending, group + "_reset" + suffix);
+            queue(player, pending, resetKey);
         }
-        if (copy) {
-            queue(player, pending, group + "_copy" + suffix);
+        if (copy && copyKey != null) {
+            queue(player, pending, copyKey);
         }
-    }
-
-    private static String nameKey(Material nugget) {
-        return "template_name_" + nugget.getKey().getKey().replace("_nugget", "");
     }
 
     private static String dyeSuffix(Material dye) {
         return "_" + dye.getKey().getKey();
     }
 
-    private void registerNameTemplates() {
-        for (Material nugget : NUGGETS) {
-            registerTemplate(nameKey(nugget), "template_name",
-                    templates.create(Type.NAME, List.of(Component.text("Name"))), List.of(nugget), null, true);
+    private void registerBase(String group, String suffix, Type type, ItemStack result, List<Material> ingredients,
+            boolean renamed) {
+        String key = group + suffix;
+        String reset = group + "_reset" + suffix;
+        String copy = type.isCopyable() ? group + "_copy" + suffix : null;
+        registerTemplate(key, group, result, ingredients, null, renamed);
+        registerTemplate(reset, group + "_reset", variant(type, Variant.RESET), ingredients, Material.BONE_MEAL, false);
+        if (copy != null) {
+            registerTemplate(copy, group + "_copy", variant(type, Variant.COPY), ingredients, Material.INK_SAC, false);
         }
-        registerVariants("template_name", "", Type.NAME, NUGGETS);
-    }
-
-    private void registerColorTemplates() {
-        for (Material material : DYES) {
-            var dye = Objects.requireNonNull(TextStyles.dye(material));
-            String suffix = dyeSuffix(material);
-            registerTemplate("template_color" + suffix, "template_color",
-                    templates.createColor(new ColorRecipe(List.of(List.of(dye.getColor())))),
-                    List.of(material), null, false);
-            registerVariants("template_color", suffix, Type.COLOR, List.of(material));
-        }
-    }
-
-    private void registerVariants(String group, String suffix, Type type, List<Material> ingredients) {
-        registerTemplate(group + "_reset" + suffix, group + "_reset", variant(type, Variant.RESET),
-                ingredients, Material.BONE_MEAL, false);
-        if (type.isCopyable()) {
-            registerTemplate(group + "_copy" + suffix, group + "_copy", variant(type, Variant.COPY),
-                    ingredients, Material.INK_SAC, false);
-        }
+        bases.add(new Base(key, ingredients, reset, copy));
+        triggers.addAll(ingredients);
     }
 
     private ItemStack variant(Type type, Variant variant) {

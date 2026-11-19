@@ -3,6 +3,7 @@ package sys.vitae.lorem;
 import java.util.Objects;
 
 import org.jspecify.annotations.NonNull;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.mockito.verification.VerificationMode;
 
@@ -21,5 +22,10 @@ public final class NonNullMockito {
 
     public static <T> @NonNull T verify(T mock, VerificationMode mode) {
         return Objects.requireNonNull(Mockito.verify(mock, mode));
+    }
+
+    public static <T> @NonNull T any(Class<T> type, @NonNull T placeholder) {
+        ArgumentMatchers.any(type);
+        return placeholder;
     }
 }

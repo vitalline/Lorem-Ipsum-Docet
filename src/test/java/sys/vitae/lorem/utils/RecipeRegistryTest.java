@@ -1,7 +1,11 @@
 package sys.vitae.lorem.utils;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
+import static sys.vitae.lorem.NonNullMockito.any;
 import static sys.vitae.lorem.NonNullMockito.mock;
 import static sys.vitae.lorem.NonNullMockito.verify;
 
@@ -50,7 +54,7 @@ class RecipeRegistryTest {
         Plugin plugin = mock(Plugin.class);
         when(plugin.namespace()).thenReturn(NAMESPACE);
         when(plugin.getServer()).thenReturn(server);
-        when(server.getOnlinePlayers()).thenAnswer(call -> List.of(online));
+        when(server.getOnlinePlayers()).thenAnswer(_ -> List.of(online));
         when(server.addRecipes(any())).thenReturn(true);
         var emptyInventory = mock(PlayerInventory.class);
         when(online.getInventory()).thenReturn(emptyInventory);
@@ -58,7 +62,7 @@ class RecipeRegistryTest {
 
         when(paper.clone()).thenReturn(paper);
         when(tag.clone()).thenReturn(tag);
-        when(templates.isBlankSheet(paper)).thenReturn(true);
+        when(templates.isSheet(paper)).thenReturn(true);
         when(templates.create(any(Templates.Type.class), anyList())).thenReturn(paper);
         when(templates.create(any(Templates.Kind.class))).thenReturn(paper);
         when(templates.createColor(any(ColorRecipe.class))).thenReturn(paper);
@@ -92,10 +96,10 @@ class RecipeRegistryTest {
         Map<String, ShapedRecipe> byName = entries.stream()
                 .collect(Collectors.toMap(recipe -> recipe.getKey().getKey(), recipe -> recipe));
 
-        ShapedRecipe name = byName.get("template_name_iron");
+        ShapedRecipe name = byName.get("template_name");
         ShapedRecipe nameReset = byName.get("template_name_reset");
-        assertEquals(name.getGroup(), byName.get("template_name_gold").getGroup());
-        assertEquals(name.getGroup(), byName.get("template_name_copper").getGroup());
+        assertEquals(List.of(Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.COPPER_NUGGET),
+                materials(name, 'I'));
         assertNotEquals(name.getGroup(), nameReset.getGroup());
         assertArrayEquals(new String[] {"PI"}, name.getShape());
         assertArrayEquals(new String[] {"PI", "M "}, nameReset.getShape());
@@ -126,18 +130,25 @@ class RecipeRegistryTest {
     }
 
     @Test
-    void joiningWithRenamedPaperUnlocksBothTextTemplatesAndAvailableModifiers() {
-        ItemStack renamed = stack(Material.PAPER), boneMeal = stack(Material.BONE_MEAL);
-        when(templates.isRenamedSheet(renamed)).thenReturn(true);
+    void joiningWithBlankPaperUnlocksDescriptionAndANuggetUnlocksName() {
+        ItemStack template = stack(Material.PAPER), nugget = stack(Material.GOLD_NUGGET);
+        ItemStack boneMeal = stack(Material.BONE_MEAL);
         Player joining = mock(Player.class);
         var book = recipeBook(joining);
         var inventory = inventory(joining);
-        when(inventory.getContents()).thenReturn(new ItemStack[] {renamed, boneMeal});
+        when(inventory.getContents()).thenReturn(new ItemStack[] {template, nugget});
         PlayerJoinEvent join = mock(PlayerJoinEvent.class);
         when(join.getPlayer()).thenReturn(joining);
         registry.onPlayerJoin(join);
-        assertEquals(keys("template_name_iron", "template_name_gold", "template_name_copper",
-                "template_lore", "template_name_reset", "template_lore_reset"), book);
+        assertTrue(book.isEmpty());
+
+        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, boneMeal});
+        registry.onPlayerJoin(join);
+        assertEquals(keys("template_lore", "template_lore_reset"), book);
+
+        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, nugget, boneMeal});
+        inventoryChange(joining, nugget);
+        assertEquals(keys("template_lore", "template_lore_reset", "template_name", "template_name_reset"), book);
     }
 
     @Test
@@ -153,11 +164,12 @@ class RecipeRegistryTest {
 
         when(inventory.getContents()).thenReturn(new ItemStack[] {paper, red, glowstone});
         inventoryChange(player, paper);
-        assertEquals(keys("template_color_red_dye", "template_glint"), book);
+        assertEquals(keys("template_color_red_dye", "template_glint", "template_lore"), book);
 
         when(inventory.getContents()).thenReturn(new ItemStack[] {ink});
         inventoryChange(player, ink);
-        assertEquals(keys("template_color_red_dye", "template_glint", "template_color_copy_red_dye"), book);
+        assertEquals(keys("template_color_red_dye", "template_glint", "template_lore",
+                "template_color_copy_red_dye", "template_lore_copy"), book);
     }
 
     @Test
@@ -191,11 +203,12 @@ class RecipeRegistryTest {
         return inventory;
     }
 
-    @SuppressWarnings("null") // Mockito matchers are placeholders for non-null arguments.
     private static Set<NamespacedKey> recipeBook(Player player) {
         var book = new HashSet<NamespacedKey>();
-        when(player.hasDiscoveredRecipe(any())).thenAnswer(call -> book.contains(call.<NamespacedKey>getArgument(0)));
-        when(player.discoverRecipes(anyCollection())).thenAnswer(call -> {
+        when(player.hasDiscoveredRecipe(any(NamespacedKey.class, new NamespacedKey(NAMESPACE, "any")))).thenAnswer(
+            call -> book.contains(call.<NamespacedKey>getArgument(0))
+        );
+        when(player.discoverRecipes(Objects.requireNonNull(anyCollection()))).thenAnswer(call -> {
             Collection<NamespacedKey> entries = call.getArgument(0);
             int before = book.size();
             book.addAll(entries);

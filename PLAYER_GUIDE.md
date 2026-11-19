@@ -24,11 +24,12 @@ ingredient on the right, and any Reset or Copy modifier below the paper.
 These are references: place the ingredients yourself in any order.
 Mixed-dye recipes aren't listed.
 
-Recipes unlock as you collect ingredients. Renamed paper unlocks Name and
-Description. Blank paper with glowstone dust unlocks Glowing, and blank
-paper with a dye unlocks that dye's Colors entry. Once you know a base
-recipe, bone meal unlocks its Reset entry and an ink sac unlocks its Copy
-entry, if it has one. You can craft any of these before unlocking it.
+Recipes unlock as you collect ingredients: holding paper and an entry's
+ingredient unlocks it, so paper alone unlocks Description, a nugget unlocks
+Name, glowstone dust unlocks Glowing, and a dye unlocks that dye's Colors
+entry. Once you know a base recipe, bone meal unlocks its Reset entry and an
+ink sac unlocks its Copy entry, if it has one. You can craft any of these
+before unlocking it.
 
 | Template | Recipe |
 | --- | --- |
