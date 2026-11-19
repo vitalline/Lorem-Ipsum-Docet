@@ -1,5 +1,5 @@
 main: sys.vitae.lorem.LoremIpsumPlugin
-version: 0.1.5-SNAPSHOT
+version: 0.2.0-SNAPSHOT
 name: LoremIpsumDocet
 author: vitae.sys
 description: Add flavor to your favorite items!
