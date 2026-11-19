@@ -37,10 +37,11 @@ import org.jspecify.annotations.NonNull;
 import org.mockito.ArgumentCaptor;
 
 import io.papermc.paper.event.player.PlayerInventorySlotChangeEvent;
+import net.kyori.adventure.text.Component;
 
 class RecipeRegistryTest {
 
-    private static final String NAMESPACE = "loremipsumdocet";
+    private static final String NAMESPACE = "loremipsum";
 
     private final Server server = mock(Server.class);
     private final @NonNull ItemStack paper = stack(Material.PAPER);
@@ -107,6 +108,13 @@ class RecipeRegistryTest {
         assertEquals(List.of(Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.COPPER_NUGGET),
                 materials(nameReset, 'I'));
         assertEquals(List.of(Material.INK_SAC), materials(byName.get("template_name_copy"), 'M'));
+
+        // Both sheets of the Description example are renamed, so neither may match a real sheet.
+        RecipeChoice secondSheet = byName.get("template_lore").getChoiceMap().get('I');
+        assertInstanceOf(RecipeChoice.PredicateChoice.class, secondSheet);
+        assertFalse(secondSheet.test(paper));
+        assertEquals(List.of(Material.PAPER), materials(byName.get("template_lore_reset"), 'I'));
+        verify(templates).create(Templates.Type.LORE, List.of(numbered(1), numbered(2)));
 
         ShapedRecipe color = byName.get("template_color_red_dye");
         ShapedRecipe colorReset = byName.get("template_color_reset_red_dye");
@@ -225,6 +233,11 @@ class RecipeRegistryTest {
         ItemStack stack = mock(ItemStack.class);
         when(stack.getType()).thenReturn(Objects.requireNonNull(material));
         return stack;
+    }
+
+    private static Component numbered(int number) {
+        return Component.translatable("potion.withAmplifier", "%s %s",
+                Component.translatable("mco.backup.entry.description", "Description"), Component.text(number));
     }
 
     private static List<Material> materials(ShapedRecipe recipe, char slot) {

@@ -54,21 +54,22 @@ public final class RecipeRegistry implements Listener {
 
     public void registerAll() {
         registerBase("template_name", "", Type.NAME, templates.create(Type.NAME, List.of(Component.text("Name"))),
-                NUGGETS, true);
-        registerBase("template_lore", "", Type.LORE,
-                templates.create(Type.LORE, List.of(Component.text("Description"), Component.empty())),
-                List.of(Material.PAPER), true);
+                NUGGETS, List.of(Component.translatable("mco.backup.entry.name", "Name")));
+        List<@NonNull Component> lines = List.of(numbered(1), numbered(2));
+        registerBase("template_lore", "", Type.LORE, templates.create(Type.LORE, lines), List.of(Material.PAPER),
+                lines);
         registerBase("template_glint", "", Type.GLINT, variant(Type.GLINT, Variant.PLAIN),
-                List.of(Material.GLOWSTONE_DUST), false);
+                List.of(Material.GLOWSTONE_DUST), List.of());
         for (Material material : DYES) {
             var dye = Objects.requireNonNull(TextStyles.dye(material));
             registerBase("template_color", dyeSuffix(material), Type.COLOR,
-                    templates.createColor(new ColorRecipe(List.of(List.of(dye.getColor())))), List.of(material), false);
+                    templates.createColor(new ColorRecipe(List.of(List.of(dye.getColor())))), List.of(material),
+                    List.of());
         }
         register("nametag_reset", "nametag_reset", templates.createNameTag(Variant.RESET),
-                ItemStack.of(Material.NAME_TAG), List.of(Material.BONE_MEAL), null);
+                ItemStack.of(Material.NAME_TAG), new RecipeChoice.MaterialChoice(Material.BONE_MEAL), null);
         register("nametag_copy", "nametag_copy", templates.createNameTag(Variant.COPY),
-                ItemStack.of(Material.NAME_TAG), List.of(Material.INK_SAC), null);
+                ItemStack.of(Material.NAME_TAG), new RecipeChoice.MaterialChoice(Material.INK_SAC), null);
 
         var server = plugin.getServer();
         if (server.addRecipes(new ArrayList<>(entries))) {
@@ -174,15 +175,27 @@ public final class RecipeRegistry implements Listener {
         return "_" + dye.getKey().getKey();
     }
 
+    /** An example sheet name like "Description 1", using the "Strength II" pattern so translations order it. */
+    private static @NonNull Component numbered(int number) {
+        return Objects.requireNonNull(Component.translatable("potion.withAmplifier", "%s %s",
+                Component.translatable("mco.backup.entry.description", "Description"), Component.text(number)));
+    }
+
+    /**
+     * The base's example sheets are renamed to {@code names}: the first is the left sheet, a second one is a sheet
+     * ingredient. Its Reset and Copy examples are blank.
+     */
     private void registerBase(String group, String suffix, Type type, ItemStack result, List<Material> ingredients,
-            boolean renamed) {
+            List<@NonNull Component> names) {
         String key = group + suffix;
         String reset = group + "_reset" + suffix;
         String copy = type.isCopyable() ? group + "_copy" + suffix : null;
-        registerTemplate(key, group, result, ingredients, null, renamed);
-        registerTemplate(reset, group + "_reset", variant(type, Variant.RESET), ingredients, Material.BONE_MEAL, false);
+        registerTemplate(key, group, result, ingredients, null, names);
+        registerTemplate(reset, group + "_reset", variant(type, Variant.RESET), ingredients, Material.BONE_MEAL,
+                List.of());
         if (copy != null) {
-            registerTemplate(copy, group + "_copy", variant(type, Variant.COPY), ingredients, Material.INK_SAC, false);
+            registerTemplate(copy, group + "_copy", variant(type, Variant.COPY), ingredients, Material.INK_SAC,
+                    List.of());
         }
         bases.add(new Base(key, ingredients, reset, copy));
         triggers.addAll(ingredients);
@@ -193,15 +206,27 @@ public final class RecipeRegistry implements Listener {
     }
 
     private void registerTemplate(String key, String group, ItemStack result, List<Material> ingredients,
-            @Nullable Material modifier, boolean renamed) {
-        ItemStack paper = ItemStack.of(Material.PAPER);
-        if (renamed) {
-            paper.editMeta(meta -> meta.customName(Component.translatable("mco.backup.entry.name", "Name")));
-        }
-        register(key, group, result, paper, ingredients, modifier);
+            @Nullable Material modifier, List<@NonNull Component> names) {
+        ItemStack paper = sheet(names.isEmpty() ? null : names.getFirst());
+        RecipeChoice ingredient = names.size() > 1 ? example(sheet(names.get(1)))
+                : new RecipeChoice.MaterialChoice(Objects.requireNonNull(ingredients));
+        register(key, group, result, paper, ingredient, modifier);
     }
 
-    private void register(String key, String group, ItemStack result, ItemStack first, List<Material> ingredients,
+    private static ItemStack sheet(@Nullable Component name) {
+        ItemStack paper = ItemStack.of(Material.PAPER);
+        if (name != null) {
+            paper.editMeta(meta -> meta.customName(name));
+        }
+        return paper;
+    }
+
+    /** Shows the example in the book without matching a real grid or shadowing vanilla recipes. */
+    private static RecipeChoice example(ItemStack item) {
+        return RecipeChoice.predicateChoice(_ -> false, Objects.requireNonNull(item));
+    }
+
+    private void register(String key, String group, ItemStack result, ItemStack first, RecipeChoice ingredient,
             @Nullable Material modifier) {
         NamespacedKey id = new NamespacedKey(plugin, key);
         ShapedRecipe recipe = new ShapedRecipe(id, result);
@@ -213,9 +238,8 @@ public final class RecipeRegistry implements Listener {
             recipe.shape("PI", "M ");
             recipe.setIngredient('M', new RecipeChoice.MaterialChoice(modifier));
         }
-        // Show the example in the book without matching a real grid or shadowing vanilla recipes.
-        recipe.setIngredient('P', RecipeChoice.predicateChoice(item -> false, Objects.requireNonNull(first)));
-        recipe.setIngredient('I', new RecipeChoice.MaterialChoice(Objects.requireNonNull(ingredients)));
+        recipe.setIngredient('P', example(first));
+        recipe.setIngredient('I', ingredient);
         entries.add(recipe);
     }
 }
