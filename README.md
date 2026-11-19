@@ -28,7 +28,23 @@ other templates can accompany a rename.
 
 Craft any template, including reset and copy templates, with additional paper
 to duplicate it: one original plus two sheets produces three. Renamed sheets
-count as blank when duplicating.
+count as blank when duplicating, except with a plain Lore template (see below).
+
+### Extending and renaming text templates
+
+A plain Lore template crafted with at least one renamed sheet, or with other
+plain Lore templates, is concatenated like the Lore recipe: in grid reading
+order, each template contributes all its lines, each renamed sheet its name, and
+each blank sheet an empty line. With only blank sheets, it's duplicated instead.
+
+Renaming a plain Name or Lore template in an anvil replaces the name, or the
+whole description, that it applies, rather than naming the sheet. This follows
+the rules for renaming an item, taking all of a description as its name: escape
+substitutions need `loremipsum.format`; a formatting-only rename restyles every
+line, keeping all of them (unless a line can't be expressed with escapes); and
+plain text keeps the style shared by all the non-empty text, if there is one (see
+[Renaming formatted items](#renaming-formatted-items)). The rename field shows
+the template's label; leaving it unchanged or clearing it changes nothing.
 
 ### Reset templates
 
@@ -236,7 +252,7 @@ field, or apply a Name reset), then rename the item.
 - Other players, and authorized players holding Shift when opening the editor,
   edit plain text without escape substitution.
 - A changed plain-text edit restores visual formatting only when it was uniform
-  across all nonempty text on that side. Mixed formatting is stripped entirely.
+  across all non-empty text on that side. Mixed formatting is stripped entirely.
   Native sign dye and glow are preserved.
 - An unchanged submission restores all original components, including mixed
   formatting. Rejected edits leave the real sign untouched.

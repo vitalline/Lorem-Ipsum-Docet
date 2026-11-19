@@ -89,7 +89,7 @@ public final class TextStyles {
         return !map(component, _ -> Style.empty()).equals(component);
     }
 
-    /** A visual style shared by all nonempty text, or null for mixed formatting. */
+    /** A visual style shared by all non-empty text, or null for mixed formatting. */
     public static @Nullable Style uniformStyle(List<? extends Component> lines) {
         List<@NonNull Style> styles = new ArrayList<>();
         for (Component line : lines) {

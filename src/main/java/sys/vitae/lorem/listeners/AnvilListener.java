@@ -1,5 +1,7 @@
 package sys.vitae.lorem.listeners;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 import org.bukkit.entity.Player;
@@ -12,6 +14,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.Repairable;
 import org.bukkit.inventory.view.AnvilView;
 import org.bukkit.plugin.Plugin;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.Style;
@@ -21,6 +25,7 @@ import sys.vitae.lorem.utils.NameTags;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
+import sys.vitae.lorem.utils.Templates.Variant;
 import sys.vitae.lorem.utils.TextStyles;
 
 /**
@@ -34,6 +39,8 @@ import sys.vitae.lorem.utils.TextStyles;
  * Plain rename text keeps the style of a uniformly formatted name.
  * Name tags get a marker line while their name is formatted (see {@link NameTags}), and a renamed name-resetting or
  * name-copying tag becomes an ordinary name tag.
+ * Renaming a Name or Description template changes the name or whole description it applies instead, by the same
+ * rules.
  *
  * <p>Typed templates in the second slot apply just their property, consuming one sheet.
  * Other than a Name template, these can be combined with renaming. They are priced like a rename.
@@ -61,6 +68,8 @@ public class AnvilListener implements Listener {
         Kind kind = templates.kind(addition);
         if (kind != null) {
             applyTemplate(event, input, addition, kind, formatting);
+        } else if (isTextTemplate(input)) {
+            renameTemplate(event, input, formatting);
         } else {
             fixRename(event, input, formatting);
             markNameTag(event);
@@ -115,6 +124,75 @@ public class AnvilListener implements Listener {
         event.setResult(out);
     }
 
+    private boolean isTextTemplate(ItemStack item) {
+        Kind kind = templates.kind(item);
+        return kind != null && kind.variant() == Variant.PLAIN && kind.type().hasText();
+    }
+
+    /**
+     * Rewrites the name or description a renamed Name or Description template applies, instead of naming the sheet.
+     * Vanilla's output is the base, so the rename keeps its price; one with a name from before templates could be
+     * renamed loses it.
+     */
+    private void renameTemplate(PrepareAnvilEvent event, ItemStack template, boolean formatting) {
+        ItemStack result = event.getResult();
+        if (result == null || result.isEmpty() || customName(result) == null) {
+            return; // not renamed, or vanilla removing an old name
+        }
+        List<@NonNull Component> text = templateText(event.getView().getRenameText(), template, formatting);
+        if (text == null) {
+            return;
+        }
+        ItemStack unnamed = result.clone();
+        ItemMeta meta = unnamed.getItemMeta();
+        meta.customName(null);
+        unnamed.setItemMeta(meta);
+        ItemStack out = templates.retext(unnamed, text);
+        event.setResult(isUnchanged(out, template) ? null : out);
+    }
+
+    /**
+     * The template's new text, following the rules for renaming an item, with all of a description taken as its
+     * name: plain text keeps a style shared by all of it, and a formatting-only rename restyles each line. Null if
+     * the field doesn't rename it. The field shows the template's label, which the client sends as blank while it's
+     * unchanged.
+     */
+    private @Nullable List<@NonNull Component> templateText(String renameText, ItemStack template, boolean formatting) {
+        Component oldName = customName(template);
+        if (renameText == null || renameText.isBlank()
+                || oldName != null && renameText.equals(FormatCodes.plainText(oldName))) {
+            return null;
+        }
+        List<@NonNull Component> old = templates.text(template);
+        if (!formatting || !FormatCodes.hasEscapes(renameText)) {
+            return List.of(plainName(renameText, Component.text().append(old).build()));
+        }
+        if (!FormatCodes.isOnlyFormatting(renameText)) {
+            return List.of(FormatCodes.toComponent(renameText));
+        }
+        List<@NonNull Component> restyled = new ArrayList<>();
+        for (Component line : old) {
+            String escaped = FormatCodes.toBuffer(line, FormatCodes.NAME_DEFAULTS);
+            if (escaped == null) {
+                return old; // a line that can't be restyled with codes
+            }
+            restyled.add(FormatCodes.toComponent(renameText + FormatCodes.stripLeadingCodes(escaped)));
+        }
+        return restyled;
+    }
+
+    private static boolean sameText(List<? extends Component> a, List<? extends Component> b) {
+        if (a.size() != b.size()) {
+            return false;
+        }
+        for (int i = 0; i < a.size(); i++) {
+            if (!FormatCodes.sameText(a.get(i), b.get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** Vanilla has no output for these ingredients, so the whole result (and its price) is built here. */
     private void applyTemplate(PrepareAnvilEvent event, ItemStack input, ItemStack sheet, Kind kind, boolean formatting) {
         ItemStack applied = templates.apply(input, sheet);
@@ -122,13 +200,22 @@ public class AnvilListener implements Listener {
             return;
         }
         AnvilView view = event.getView();
-        Component oldName = customName(input);
-        Component name = resolveName(view.getRenameText(), oldName, formatting);
-        boolean renamed = kind.type() != Type.NAME && !FormatCodes.sameText(name, oldName);
-        if (renamed) {
-            ItemMeta meta = applied.getItemMeta();
-            meta.customName(name);
-            applied.setItemMeta(meta);
+        boolean renamed;
+        if (isTextTemplate(input)) {
+            List<@NonNull Component> text = kind.type() == Type.NAME ? null : templateText(view.getRenameText(), input, formatting);
+            renamed = text != null && !sameText(text, templates.text(input));
+            if (renamed) {
+                applied = templates.retext(applied, text);
+            }
+        } else {
+            Component oldName = customName(input);
+            Component name = resolveName(view.getRenameText(), oldName, formatting);
+            renamed = kind.type() != Type.NAME && !FormatCodes.sameText(name, oldName);
+            if (renamed) {
+                ItemMeta meta = applied.getItemMeta();
+                meta.customName(name);
+                applied.setItemMeta(meta);
+            }
         }
         ItemStack out = templates.asOrdinaryNameTag(NameTags.withMarker(applied));
         if (out.isSimilar(input)) {
@@ -167,7 +254,7 @@ public class AnvilListener implements Listener {
      * Plain rename text in the style the whole old name shared, as the rename field can only show plain text.
      * Mixed formatting is dropped, as in vanilla.
      */
-    private static Component plainName(String renameText, Component oldName) {
+    private static @NonNull Component plainName(String renameText, Component oldName) {
         Style style = oldName == null ? null : TextStyles.sharedStyle(oldName);
         return Component.text(Objects.requireNonNull(renameText), style == null ? Style.empty() : style);
     }

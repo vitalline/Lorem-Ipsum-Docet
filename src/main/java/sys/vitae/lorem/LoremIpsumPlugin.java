@@ -8,6 +8,7 @@ import sys.vitae.lorem.listeners.PlacedItemListener;
 import sys.vitae.lorem.listeners.TemplateCraftListener;
 import sys.vitae.lorem.listeners.TextFieldListener;
 import sys.vitae.lorem.utils.PlacedItemData;
+import sys.vitae.lorem.utils.RecipeRegistry;
 import sys.vitae.lorem.utils.Templates;
 
 public class LoremIpsumPlugin extends JavaPlugin {
@@ -15,6 +16,9 @@ public class LoremIpsumPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         Templates templates = new Templates(this);
+        RecipeRegistry recipes = new RecipeRegistry(this, templates);
+        recipes.registerAll();
+        getServer().getPluginManager().registerEvents(recipes, this);
         getServer().getPluginManager().registerEvents(new AnvilListener(this, templates), this);
         getServer().getPluginManager().registerEvents(new TemplateCraftListener(this, templates), this);
         getServer().getPluginManager().registerEvents(new NameTagListener(templates), this);

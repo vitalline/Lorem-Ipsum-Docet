@@ -115,6 +115,17 @@ class TemplatesTest {
     }
 
     @Test
+    void retextingKeepsTheStackSize() {
+        ItemStack template = paper("lore"), copy = paper("lore");
+        when(template.getAmount()).thenReturn(5);
+        when(template.clone()).thenReturn(copy);
+
+        templates.retext(template, List.of(Component.text("new")));
+        verify(copy.getItemMeta()).lore(List.of(Component.text("new")));
+        verify(copy).setAmount(5);
+    }
+
+    @Test
     void nameAndLoreApplyOnlyTheirOwnProperty() {
         ItemStack input = mock(ItemStack.class), result = mock(ItemStack.class);
         ItemMeta meta = mock(ItemMeta.class);

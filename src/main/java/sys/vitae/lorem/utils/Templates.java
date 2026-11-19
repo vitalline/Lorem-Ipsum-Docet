@@ -241,6 +241,13 @@ public final class Templates {
         return result;
     }
 
+    /** The template holding the text instead; unlike {@link #withText}, the stack keeps its size. */
+    public @NonNull ItemStack retext(ItemStack template, List<? extends Component> text) {
+        ItemStack result = withText(template, text);
+        result.setAmount(template.getAmount());
+        return result;
+    }
+
     private boolean isName(ItemStack template) {
         return Objects.requireNonNull(kind(template)).type() == Type.NAME;
     }

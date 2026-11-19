@@ -175,6 +175,22 @@ public class TemplateCraftListener implements Listener {
             }
         }
 
+        if (ingredients.isEmpty() && !marked.isEmpty() && marked.stream().allMatch(this::isPlainLore)
+                && (marked.size() > 1 || sheets.stream().anyMatch(templates::isRenamedSheet))) {
+            // Like the Description recipe, with each template contributing all its lines.
+            List<Component> lore = new ArrayList<>();
+            for (ItemStack item : matrix) {
+                if (isEmpty(item)) {
+                    continue;
+                }
+                if (templates.kind(item) != null) {
+                    lore.addAll(templates.text(item));
+                } else {
+                    lore.add(sheetLine(item));
+                }
+            }
+            return new Plan(templates.create(Type.LORE, lore), used);
+        }
         if (marked.size() == 1 && !sheets.isEmpty() && ingredients.isEmpty()) {
             ItemStack copies = marked.getFirst().clone();
             copies.setAmount(sheets.size() + 1);
@@ -242,8 +258,7 @@ public class TemplateCraftListener implements Listener {
             }
             List<Component> lore = new ArrayList<>();
             for (ItemStack sheet : sheets) {
-                ItemMeta meta = sheet.getItemMeta();
-                lore.add(meta.hasCustomName() ? meta.customName() : Component.empty());
+                lore.add(sheetLine(sheet));
             }
             return new Plan(templates.create(Type.LORE, lore), used);
         }
@@ -262,6 +277,16 @@ public class TemplateCraftListener implements Listener {
         }
         List<Color> dyes = dyes(ingredients);
         return dyes == null ? null : new Plan(templates.createColor(new ColorRecipe(List.of(dyes))), used);
+    }
+
+    /** A sheet's description line: its name, or an empty line if it's blank. */
+    private static Component sheetLine(ItemStack sheet) {
+        ItemMeta meta = sheet.getItemMeta();
+        return meta.hasCustomName() ? meta.customName() : Component.empty();
+    }
+
+    private boolean isPlainLore(ItemStack template) {
+        return new Kind(Type.LORE, Variant.PLAIN).equals(templates.kind(template));
     }
 
     /** Bone meal bleaches into a Reset variant; an ink sac transcribes into a Copy variant. */

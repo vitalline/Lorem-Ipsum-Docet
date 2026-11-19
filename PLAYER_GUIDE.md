@@ -19,6 +19,17 @@ templates can be combined with a rename.
 
 ## Make templates
 
+The recipe book shows example layouts: paper on the left, the template
+ingredient on the right, and any Reset or Copy modifier below the paper.
+These are references: place the ingredients yourself in any order.
+Mixed-dye recipes aren't listed.
+
+Recipes unlock as you collect ingredients. Renamed paper unlocks Name and
+Description. Blank paper with glowstone dust unlocks Glowing, and blank
+paper with a dye unlocks that dye's Colors entry. Once you know a base
+recipe, bone meal unlocks its Reset entry and an ink sac unlocks its Copy
+entry, if it has one. You can craft any of these before unlocking it.
+
 | Template | Recipe |
 | --- | --- |
 | **Name** | One renamed paper + an iron, gold, or copper nugget |
@@ -49,7 +60,20 @@ work in an anvil.
 
 Put a template and additional paper in the grid: one template plus two paper
 makes three. This works for plain, Reset, and Copy templates. Renamed paper
-counts as blank for duplication.
+counts as blank for duplication, except with a Description template.
+
+### Extend or edit text templates
+
+Craft a Description template with renamed paper, or with other Description
+templates, to join them into one: each template's lines, each renamed paper's
+name, and an empty line for each blank paper, in crafting-grid reading order.
+With only blank paper, the template is duplicated instead.
+
+Rename a Name or Description template in an anvil to replace the name, or the
+whole description, that it applies. This works like renaming an item, treating
+all of a description as its name: plain text keeps a style shared by all of it,
+formatting codes alone restyle every line, and escape codes need the formatting
+permission.
 
 ## Color and style
 
@@ -98,6 +122,9 @@ when applying other styles.
 | --- | --- |
 | Unnamed name tag + bone meal | **Name Tag - Reset**; use on a named mob to remove its name |
 | Unnamed name tag + ink sac | **Name Tag - Copy**; use on a named mob to get an ordinary name tag with its name |
+
+Having an ordinary unnamed name tag and the corresponding modifier unlocks
+that entry in the recipe book.
 
 Both tags shimmer. They do nothing to unnamed mobs. In Survival, a Reset tag is
 consumed on use; a Copy tag is replaced by the named tag (or puts it in your

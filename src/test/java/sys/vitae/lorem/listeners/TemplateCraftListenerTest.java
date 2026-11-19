@@ -255,20 +255,45 @@ class TemplateCraftListenerTest {
     }
 
     @Test
-    void copiesEachTemplateIncludingVariantsButDoesNotCombineTwoOfTheSameType() {
+    void copiesEachTemplateIncludingVariantsButOnlyCombinesDescriptions() {
         for (Type type : Type.values()) {
             for (Variant variant : Variant.values()) {
                 if (variant == Variant.COPY && !type.isCopyable()) {
                     continue;
                 }
+                boolean concatenates = type == Type.LORE && variant == Variant.PLAIN;
                 ItemStack template = template(type, variant);
                 when(template.clone()).thenReturn(result);
-                assertSame(result, listener.plan(new ItemStack[] {template, sheet(null), sheet(Component.text("ignored"))}).result());
+                ItemStack paper = concatenates ? sheet(null) : sheet(Component.text("ignored"));
+                assertSame(result, listener.plan(new ItemStack[] {template, sheet(null), paper}).result());
                 verify(result).setAmount(3);
                 clearInvocations(result);
-                assertNull(listener.plan(new ItemStack[] {template, template}));
+                if (!concatenates) {
+                    assertNull(listener.plan(new ItemStack[] {template, template}));
+                }
             }
         }
+    }
+
+    @Test
+    void descriptionTemplatesConcatenateWithRenamedPaperAndEachOtherInReadingOrder() {
+        ItemStack first = template(Type.LORE, Variant.PLAIN), second = template(Type.LORE, Variant.PLAIN);
+        when(templates.text(first))
+                .thenReturn(Objects.requireNonNull(List.of(Component.text("a"), Component.text("b"))));
+        when(templates.text(second)).thenReturn(Objects.requireNonNull(List.of(Component.text("c"))));
+        when(templates.create(Type.LORE, List.of(Component.text("x"), Component.text("a"), Component.text("b"),
+                Component.empty(), Component.text("c")))).thenReturn(result);
+        var plan = listener.plan(new ItemStack[] {sheet(Component.text("x")), null, first, sheet(null), second});
+        assertSame(result, plan.result());
+        assertEquals(List.of(0, 2, 3, 4), plan.consumed());
+
+        ItemStack joined = item(Material.PAPER);
+        when(templates.create(Type.LORE, List.of(Component.text("a"), Component.text("b"), Component.text("c"))))
+                .thenReturn(joined);
+        assertSame(joined, listener.plan(new ItemStack[] {first, second}).result());
+
+        assertNull(listener.plan(new ItemStack[] {first, template(Type.LORE, Variant.RESET)}));
+        assertNull(listener.plan(new ItemStack[] {first, template(Type.NAME, Variant.PLAIN)}));
     }
 
     @ParameterizedTest

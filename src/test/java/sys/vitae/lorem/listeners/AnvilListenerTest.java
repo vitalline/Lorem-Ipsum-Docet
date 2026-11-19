@@ -7,6 +7,7 @@ import static sys.vitae.lorem.NonNullMockito.verify;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -19,6 +20,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.view.AnvilView;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitScheduler;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -217,5 +219,68 @@ class AnvilListenerTest {
         when(view.getRenameText()).thenReturn("New");
         listener.onPrepareAnvil(event);
         verify(event, never()).setResult(any());
+    }
+
+    @Test
+    void renamingADescriptionTemplateRewritesAllOfItInsteadOfNamingIt() {
+        Component old = Component.text("Old", NamedTextColor.RED);
+        // Plain text keeps a style shared by all the non-empty text...
+        assertTemplateRenamed(List.of(old, Component.empty(), Component.text("kept", NamedTextColor.RED)), "New",
+                List.of(Component.text("New", NamedTextColor.RED)));
+        // ...but not mixed formatting.
+        assertTemplateRenamed(List.of(old, Component.text("kept", NamedTextColor.BLUE)), "New",
+                List.of(Component.text("New")));
+
+        // Formatting codes alone restyle every line, unless one can't be restyled with codes.
+        when(player.getGameMode()).thenReturn(GameMode.CREATIVE);
+        assertTemplateRenamed(List.of(old, Component.empty()), "\\l",
+                List.of(FormatCodes.toComponent("\\lOld"), Component.empty()));
+        List<@NonNull Component> translated = List.of(old, Component.translatable("block.minecraft.stone"));
+        ItemStack out = assertTemplateRenamed(translated, "\\l", translated);
+        clearInvocations(event);
+        when(out.isSimilar(input)).thenReturn(true);
+        listener.onPrepareAnvil(event);
+        verify(event).setResult(null);
+    }
+
+    /** Renames a Description template holding {@code old}; returns the output, which holds {@code expected}. */
+    private ItemStack assertTemplateRenamed(List<@NonNull Component> old, @NonNull String renameText,
+            List<@NonNull Component> expected) {
+        clearInvocations(event);
+        when(templates.kind(input)).thenReturn(new Kind(Type.LORE, Variant.PLAIN));
+        when(templates.text(input)).thenReturn(Objects.requireNonNull(old));
+        when(view.getRenameText()).thenReturn(renameText);
+        ItemStack vanilla = mock(ItemStack.class), unnamed = mock(ItemStack.class), out = mock(ItemStack.class);
+        ItemMeta vanillaMeta = mock(ItemMeta.class), unnamedMeta = mock(ItemMeta.class);
+        when(event.getResult()).thenReturn(vanilla);
+        when(vanilla.getItemMeta()).thenReturn(vanillaMeta);
+        when(vanillaMeta.hasCustomName()).thenReturn(true);
+        when(vanillaMeta.customName()).thenReturn(Component.text(renameText));
+        when(vanilla.clone()).thenReturn(unnamed);
+        when(unnamed.getItemMeta()).thenReturn(unnamedMeta);
+        when(templates.retext(unnamed, expected)).thenReturn(out);
+        when(out.clone()).thenReturn(out);
+        when(out.getItemMeta()).thenReturn(mock(ItemMeta.class));
+
+        listener.onPrepareAnvil(event);
+        verify(unnamedMeta).customName(null);
+        verify(event).setResult(out);
+        return out;
+    }
+
+    @Test
+    void renamingATextTemplateWhileApplyingAnotherTemplateRewritesItsText() {
+        when(templates.kind(input)).thenReturn(new Kind(Type.NAME, Variant.PLAIN));
+        when(templates.text(input)).thenReturn(Objects.requireNonNull(List.of(Component.text("Old"))));
+        when(templates.kind(addition)).thenReturn(new Kind(Type.GLINT, Variant.PLAIN));
+        ItemStack applied = mock(ItemStack.class), renamed = mock(ItemStack.class);
+        when(templates.apply(input, addition)).thenReturn(applied);
+        when(templates.retext(applied, List.of(Component.text("New")))).thenReturn(renamed);
+        when(view.getRenameText()).thenReturn("New");
+
+        listener.onPrepareAnvil(event);
+        verify(applied, never()).getItemMeta();
+        verify(event).setResult(renamed);
+        verify(view).setRepairCost(2);
     }
 }
