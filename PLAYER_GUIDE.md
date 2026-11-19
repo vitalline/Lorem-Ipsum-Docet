@@ -37,7 +37,7 @@ entry, if it has one. You can craft any of these before unlocking it.
 | **Glowing** | One blank paper + glowstone dust |
 | **Colors** | One blank paper + one or more dyes |
 
-“Blank paper” means ordinary paper without a custom name. The Name recipe uses
+"Blank paper" means ordinary paper without a custom name. The Name recipe uses
 renamed paper; with blank paper and a nugget, vanilla makes a name tag instead.
 For a Description, each paper becomes a line in crafting-grid reading order;
 blank paper in the recipe makes an empty line.
