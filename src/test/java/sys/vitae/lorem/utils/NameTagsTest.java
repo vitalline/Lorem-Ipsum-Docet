@@ -15,6 +15,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -29,20 +30,41 @@ class NameTagsTest {
         ItemStack marked = NameTags.withMarker(tag);
         assertSame(tag.clone(), marked);
         ItemMeta meta = marked.getItemMeta();
-        verify(meta).lore(List.of(LORE, NameTags.MARKER));
+        verify(meta).lore(List.of(LORE, TextStyles.CUSTOM_MARKER));
         verify(marked).setItemMeta(meta);
 
-        ItemStack alreadyMarked = nameTag(Component.text("Mob", NamedTextColor.RED), List.of(LORE, NameTags.MARKER));
+        ItemStack alreadyMarked = nameTag(Component.text("Mob", NamedTextColor.RED), List.of(LORE, TextStyles.CUSTOM_MARKER));
         assertSame(alreadyMarked, NameTags.withMarker(alreadyMarked));
     }
 
     @Test
-    void plainOrRemovedNamesDropOnlyTheMarker() {
-        ItemStack plain = nameTag(Component.text("Mob"), List.of(NameTags.MARKER, LORE));
+    void plainOrRemovedNamesDropOnlyTheFinalMarker() {
+        ItemStack plain = nameTag(Component.text("Mob"), List.of(LORE, TextStyles.CUSTOM_MARKER));
         verify(NameTags.withMarker(plain).getItemMeta()).lore(List.of(LORE));
 
-        ItemStack unnamed = nameTag(null, List.of(NameTags.MARKER));
+        ItemStack unnamed = nameTag(null, List.of(TextStyles.CUSTOM_MARKER));
         verify(NameTags.withMarker(unnamed).getItemMeta()).lore(null);
+
+        // A line like the marker that isn't last is lore.
+        ItemStack inner = nameTag(Component.text("Mob"), List.of(TextStyles.CUSTOM_MARKER, LORE));
+        assertSame(inner, NameTags.withMarker(inner));
+    }
+
+    @Test
+    void loreEndingLikeTheMarkerKeepsThatLine() {
+        List<@NonNull Component> lore = List.of(LORE, TextStyles.CUSTOM_MARKER);
+        ItemMeta meta = mock(ItemMeta.class);
+        when(meta.customName()).thenReturn(Component.text("Mob"));
+        NameTags.setLore(meta, lore);
+        ArgumentCaptor<List<Component>> stored = ArgumentCaptor.captor();
+        verify(meta).lore(stored.capture());
+        assertEquals(List.of(LORE, TextStyles.CUSTOM_MARKER, TextStyles.CUSTOM_MARKER), stored.getValue());
+
+        // Syncing that lore, as the anvil does next, keeps the line whether or not the name is formatted.
+        ItemStack plain = nameTag(Component.text("Mob"), stored.getValue());
+        assertSame(plain, NameTags.withMarker(plain));
+        ItemStack formatted = nameTag(Component.text("Mob", NamedTextColor.RED), stored.getValue());
+        assertSame(formatted, NameTags.withMarker(formatted));
     }
 
     @Test
@@ -66,7 +88,7 @@ class NameTagsTest {
                 if (name.color() == null) {
                     verify(meta, never()).lore(any());
                 } else {
-                    verify(meta).lore(List.of(NameTags.MARKER));
+                    verify(meta).lore(List.of(TextStyles.CUSTOM_MARKER));
                 }
                 verify(tag).setItemMeta(meta);
                 assertEquals(List.of(tag), construction.constructed());

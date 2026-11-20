@@ -1,8 +1,6 @@
 package sys.vitae.lorem.utils;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
@@ -11,19 +9,13 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextDecoration;
 
 /**
- * Name tags with a formatted name get a marker lore line. Item tooltips show unstyled custom names in italics,
- * so a name with explicit default formatting looks the same there, yet renders differently on a mob.
+ * Name tags with a formatted name get the {@link TextStyles#CUSTOM_MARKER} after their other lore. Item tooltips show
+ * unstyled custom names in italics, so a name with explicit default formatting looks the same there, yet renders
+ * differently on a mob.
  */
 public final class NameTags {
-
-    /** Vanilla's "Custom", styled like vanilla's own tooltip lines. */
-    public static final @NonNull Component MARKER = Objects.requireNonNull(
-            Component.translatable("generator.custom", "Custom")
-                    .color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
 
     private NameTags() {}
 
@@ -32,9 +24,17 @@ public final class NameTags {
         ItemStack tag = new ItemStack(Material.NAME_TAG);
         ItemMeta meta = tag.getItemMeta();
         meta.customName(name);
-        syncMarker(meta, name);
+        if (TextStyles.isFormatted(name)) {
+            meta.lore(List.of(TextStyles.CUSTOM_MARKER));
+        }
         tag.setItemMeta(meta);
         return tag;
+    }
+
+    /** Sets a name tag's lore, followed by the marker if its name is formatted. */
+    public static void setLore(ItemMeta meta, @Nullable List<? extends Component> lore) {
+        List<Component> marked = marked(meta, lore == null ? List.of() : lore);
+        meta.lore(marked.isEmpty() ? null : marked);
     }
 
     /** The item with its marker matching its name; the item itself if that's already so or it isn't a name tag. */
@@ -44,25 +44,22 @@ public final class NameTags {
         }
         ItemStack result = item.clone();
         ItemMeta meta = result.getItemMeta();
-        if (meta == null || !syncMarker(meta, meta.customName())) {
+        if (meta == null) {
             return item;
         }
+        List<Component> lore = meta.lore();
+        List<Component> current = lore == null ? List.of() : lore;
+        List<Component> updated = marked(meta, TextStyles.unmarked(current));
+        if (updated.equals(current)) {
+            return item;
+        }
+        meta.lore(updated.isEmpty() ? null : updated);
         result.setItemMeta(meta);
         return result;
     }
 
-    /** Adds or removes the marker (after any other lore) to match the name; returns whether the lore changed. */
-    private static boolean syncMarker(ItemMeta meta, @Nullable Component name) {
-        List<Component> lore = meta.lore();
-        List<Component> updated = lore == null ? new ArrayList<>() : new ArrayList<>(lore);
-        updated.removeIf(MARKER::equals);
-        if (name != null && TextStyles.isFormatted(name)) {
-            updated.add(MARKER);
-        }
-        if (updated.equals(lore == null ? List.of() : lore)) {
-            return false;
-        }
-        meta.lore(updated.isEmpty() ? null : updated);
-        return true;
+    private static @NonNull List<Component> marked(ItemMeta meta, List<? extends Component> lore) {
+        Component name = meta.customName();
+        return TextStyles.marked(lore, name != null && TextStyles.isFormatted(name));
     }
 }

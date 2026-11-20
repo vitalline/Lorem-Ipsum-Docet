@@ -16,11 +16,20 @@ import org.jspecify.annotations.Nullable;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.Style;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 
 public final class TextStyles {
+
+    /**
+     * Vanilla's "Custom", styled like vanilla's own tooltip lines. It follows text with explicit formatting, as item
+     * tooltips may show it the same way as the default formatting (see {@link #marked}).
+     */
+    public static final @NonNull Component CUSTOM_MARKER = Objects.requireNonNull(
+            Component.translatable("generator.custom", "Custom")
+                    .color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
 
     private TextStyles() {}
 
@@ -87,6 +96,27 @@ public final class TextStyles {
     /** Whether any part of the text has explicit styling, even if it matches the context's defaults. */
     public static boolean isFormatted(Component component) {
         return !map(component, _ -> Style.empty()).equals(component);
+    }
+
+    /**
+     * The lines followed by the marker if the text they show or describe is formatted. Lines already ending in one
+     * get another regardless, so that {@link #unmarked} always restores them.
+     */
+    public static @NonNull List<Component> marked(List<? extends Component> lines, boolean formatted) {
+        List<Component> result = new ArrayList<>(lines);
+        if (formatted || endsWithMarker(lines)) {
+            result.add(CUSTOM_MARKER);
+        }
+        return result;
+    }
+
+    /** The lines without a final marker. */
+    public static @NonNull List<Component> unmarked(List<? extends Component> lines) {
+        return new ArrayList<>(endsWithMarker(lines) ? lines.subList(0, lines.size() - 1) : lines);
+    }
+
+    private static boolean endsWithMarker(List<? extends Component> lines) {
+        return !lines.isEmpty() && CUSTOM_MARKER.equals(lines.getLast());
     }
 
     /** A visual style shared by all non-empty text, or null for mixed formatting. */

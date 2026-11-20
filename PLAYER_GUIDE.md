@@ -96,7 +96,9 @@ with a Name or Description template to color all of that template's text.
 Craft a Name or Description template with one styling ingredient. Each
 ingredient changes only its own property across all the text. Decorations
 toggle off if already enabled everywhere; otherwise they turn on everywhere.
-Use multiple dyes together to mix a text color.
+Use multiple dyes together to mix a text color. A gray **Custom** line under
+the text indicates explicit formatting, to tell it apart from unformatted text
+that may look the same. The line isn't applied with the text.
 
 | Ingredient | Effect |
 | --- | --- |

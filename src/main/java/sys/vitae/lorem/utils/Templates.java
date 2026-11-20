@@ -1,6 +1,5 @@
 package sys.vitae.lorem.utils;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -223,20 +222,23 @@ public final class Templates {
     }
 
     public @NonNull List<@NonNull Component> text(ItemStack template) {
-        List<Component> lines = template.getItemMeta().lore();
-        if (lines == null || lines.isEmpty()) {
+        List<Component> lore = template.getItemMeta().lore();
+        List<Component> lines = lore == null ? List.of() : TextStyles.unmarked(lore);
+        if (lines.isEmpty()) {
             throw new IllegalArgumentException("Text template is missing its text payload");
         }
         List<@NonNull Component> text = Objects.requireNonNull(lines.stream().<@NonNull Component>map(Objects::requireNonNull).toList());
         return isName(template) ? Objects.requireNonNull(text.stream().map(Templates::unwrapPreview).toList()) : text;
     }
 
+    /** Like name tags, text templates with any explicit formatting get the {@link TextStyles#CUSTOM_MARKER}. */
     public @NonNull ItemStack withText(ItemStack template, List<? extends Component> text) {
         boolean name = isName(template);
         ItemStack result = template.clone();
         result.setAmount(1);
         ItemMeta meta = result.getItemMeta();
-        meta.lore(name ? text.stream().map(Templates::wrapPreview).toList() : text);
+        meta.lore(TextStyles.marked(name ? text.stream().map(Templates::wrapPreview).toList() : text,
+                text.stream().anyMatch(TextStyles::isFormatted)));
         result.setItemMeta(meta);
         return result;
     }
@@ -279,7 +281,14 @@ public final class Templates {
         boolean reset = kind.variant() == Variant.RESET;
         switch (kind.type()) {
             case NAME -> meta.customName(reset ? null : text(template).getFirst());
-            case LORE -> meta.lore(reset ? null : text(template));
+            case LORE -> {
+                List<@NonNull Component> lore = reset ? null : text(template);
+                if (input.getType() == Material.NAME_TAG) {
+                    NameTags.setLore(meta, lore);
+                } else {
+                    meta.lore(lore);
+                }
+            }
             case GLINT -> meta.setEnchantmentGlintOverride(reset ? null : true);
             case COLOR -> {
                 if (!(meta instanceof LeatherArmorMeta dyed)) {
@@ -306,10 +315,8 @@ public final class Templates {
             case NAME -> meta.customName() instanceof Component name ? create(Type.NAME, List.of(name)) : null;
             case LORE -> {
                 List<Component> original = meta.lore();
-                List<Component> lore = original == null ? new ArrayList<>() : new ArrayList<>(original);
-                if (source.getType() == Material.NAME_TAG) {
-                    lore.removeIf(NameTags.MARKER::equals);
-                }
+                List<Component> lore = original == null ? List.of()
+                        : source.getType() == Material.NAME_TAG ? TextStyles.unmarked(original) : original;
                 yield lore.isEmpty() ? null : create(Type.LORE, lore);
             }
             case COLOR -> meta instanceof LeatherArmorMeta dyed && dyed.isDyed()

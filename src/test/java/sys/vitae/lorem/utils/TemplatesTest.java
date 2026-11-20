@@ -115,6 +115,32 @@ class TemplatesTest {
     }
 
     @Test
+    void formattedTextIsMarkedAfterItsLinesButTheMarkerIsNotPartOfTheText() {
+        @NonNull Component plain = Component.text("text"), styled = Component.text("text", NamedTextColor.WHITE);
+        for (String id : List.of("name", "lore")) {
+            ItemStack template = paper(id), copy = paper(id);
+            when(template.clone()).thenReturn(copy);
+            ItemMeta meta = copy.getItemMeta();
+            ArgumentCaptor<List<Component>> lore = ArgumentCaptor.captor();
+
+            templates.withText(template, List.of(plain));
+            verify(meta).lore(lore.capture());
+            assertFalse(lore.getValue().contains(TextStyles.CUSTOM_MARKER));
+
+            // Text that ends like the marker is formatted too, so the marker still follows it.
+            for (List<@NonNull Component> text : List.of(List.of(plain, styled), List.of(plain, TextStyles.CUSTOM_MARKER))) {
+                clearInvocations(meta);
+                templates.withText(template, text);
+                verify(meta).lore(lore.capture());
+                assertEquals(text.size() + 1, lore.getValue().size());
+                assertEquals(TextStyles.CUSTOM_MARKER, lore.getValue().getLast());
+                when(meta.lore()).thenReturn(lore.getValue());
+                assertEquals(text, templates.text(copy));
+            }
+        }
+    }
+
+    @Test
     void retextingKeepsTheStackSize() {
         ItemStack template = paper("lore"), copy = paper("lore");
         when(template.getAmount()).thenReturn(5);
@@ -146,6 +172,13 @@ class TemplatesTest {
         assertSame(result, templates.apply(input, lore));
         verify(meta).lore(List.of(text, Component.empty()));
         verify(meta, never()).customName(any());
+
+        // A name tag's lore stays followed by its formatting marker.
+        clearInvocations(meta);
+        when(input.getType()).thenReturn(Material.NAME_TAG);
+        when(meta.customName()).thenReturn(Component.text("Mob", NamedTextColor.RED));
+        templates.apply(input, lore);
+        verify(meta).lore(List.of(text, Component.empty(), TextStyles.CUSTOM_MARKER));
     }
 
     @Test
@@ -191,14 +224,14 @@ class TemplatesTest {
         doReturn(copy).when(spy).create(Type.NAME, List.of(name));
         assertSame(copy, spy.copyFrom(Type.NAME, source));
 
-        when(meta.lore()).thenReturn(new ArrayList<Component>(List.of(Component.text("line"), NameTags.MARKER)));
-        doReturn(copy).when(spy).create(Type.LORE, List.of(Component.text("line"), NameTags.MARKER));
+        when(meta.lore()).thenReturn(new ArrayList<Component>(List.of(Component.text("line"), TextStyles.CUSTOM_MARKER)));
+        doReturn(copy).when(spy).create(Type.LORE, List.of(Component.text("line"), TextStyles.CUSTOM_MARKER));
         assertSame(copy, spy.copyFrom(Type.LORE, source));
         // A name tag's formatting marker is presentation, not description.
         when(source.getType()).thenReturn(Material.NAME_TAG);
         doReturn(copy).when(spy).create(Type.LORE, List.of(Component.text("line")));
         assertSame(copy, spy.copyFrom(Type.LORE, source));
-        when(meta.lore()).thenReturn(new ArrayList<Component>(List.of(NameTags.MARKER)));
+        when(meta.lore()).thenReturn(new ArrayList<Component>(List.of(TextStyles.CUSTOM_MARKER)));
         assertNull(spy.copyFrom(Type.LORE, source));
 
         when(meta.isDyed()).thenReturn(true);

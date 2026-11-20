@@ -160,12 +160,17 @@ Several dyes can be mixed in one template craft. A Color template can also be
 crafted with a Name/Lore template to apply its preview color to all of that
 template's text. Styling consumes the input template(s) and ingredients.
 
-Item tooltips show unformatted names in italics, so a name with explicitly
-default formatting (such as white italics) would look identical there, even
-though mobs display them differently. Name tags with any explicit formatting
-therefore get a gray `Custom` line (vanilla's translated label) after their other
-lore. It's added and removed automatically when the tag is renamed or a template
-is applied to it in an anvil.
+Explicit formatting can look exactly like the default in a tooltip, yet differ
+once applied - for example, a name in explicit white italics previews just like
+an unstyled one, but on a mob only the unstyled name shows upright. To tell them
+apart, Name and Lore templates with text that has any explicit formatting get a
+gray `Custom` line (vanilla's translated label) after their text. It only marks
+the template; it isn't part of the text the template applies, joins or is
+renamed from.
+
+Name tags are marked the same way, after their other lore. Their marker is added
+and removed automatically when the tag is renamed or a template is applied to it
+in an anvil, and a Lore Copy template doesn't take it along.
 
 Water bottles must be ordinary drinkable water, without custom potion effects;
 other potions and splash/lingering water bottles are not accepted. The empty

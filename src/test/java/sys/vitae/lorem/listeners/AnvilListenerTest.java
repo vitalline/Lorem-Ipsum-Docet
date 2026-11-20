@@ -28,11 +28,11 @@ import org.junit.jupiter.api.Test;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import sys.vitae.lorem.utils.FormatCodes;
-import sys.vitae.lorem.utils.NameTags;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
 import sys.vitae.lorem.utils.Templates.Variant;
+import sys.vitae.lorem.utils.TextStyles;
 
 class AnvilListenerTest {
 
@@ -125,7 +125,7 @@ class AnvilListenerTest {
     @Test
     void plainRenameRemovesTheNameTagMarkerEvenWithoutFormattingAccess() {
         Component lore = Component.text("lore");
-        ItemStack vanilla = nameTag(Component.text("Plain"), List.of(lore, NameTags.MARKER));
+        ItemStack vanilla = nameTag(Component.text("Plain"), List.of(lore, TextStyles.CUSTOM_MARKER));
         when(event.getResult()).thenReturn(vanilla);
 
         listener.onPrepareAnvil(event);
@@ -142,7 +142,7 @@ class AnvilListenerTest {
 
         listener.onPrepareAnvil(event);
         ItemStack marked = applied.clone();
-        verify(marked.getItemMeta()).lore(List.of(NameTags.MARKER));
+        verify(marked.getItemMeta()).lore(List.of(TextStyles.CUSTOM_MARKER));
         verify(event).setResult(marked);
 
         clearInvocations(event, view);
