@@ -218,6 +218,51 @@ class TemplateCraftListenerTest {
         }
     }
 
+    @Test
+    void colorAndColorResetTemplatesDyeOrUndyeAnItemLikeADye() {
+        ItemStack armor = item(Material.LEATHER_CHESTPLATE), dyed = item(Material.LEATHER_CHESTPLATE);
+        for (Variant variant : List.of(Variant.PLAIN, Variant.RESET)) {
+            ItemStack color = template(Type.COLOR, variant);
+            when(templates.dye(armor, color)).thenReturn(dyed);
+            var plan = listener.plan(new ItemStack[] {armor, null, color});
+            assertSame(dyed, plan.result());
+            assertEquals(List.of(0, 2), plan.consumed());
+            // Undyeable or unchanged items, and more than one item at a time, aren't dyed.
+            assertNull(listener.plan(new ItemStack[] {item(Material.DIAMOND_SWORD), color}));
+            assertNull(listener.plan(new ItemStack[] {armor, armor, color}));
+        }
+        // Other templates aren't applied in the grid.
+        ItemStack glint = template(Type.GLINT, Variant.RESET);
+        assertNull(listener.plan(new ItemStack[] {armor, glint}));
+        verify(templates, never()).dye(armor, glint);
+    }
+
+    @Test
+    void colorResetClearsAndColorCopyTakesTheColorOfTextTemplates() {
+        List<@NonNull Component> cleared = TextStyles.color(STYLED, null);
+        for (Type type : List.of(Type.NAME, Type.LORE)) {
+            ItemStack text = template(type, Variant.PLAIN), reset = template(Type.COLOR, Variant.RESET);
+            when(templates.text(text)).thenReturn(STYLED);
+            when(templates.withText(text, cleared)).thenReturn(result);
+            assertSame(result, listener.plan(new ItemStack[] {reset, text}).result());
+
+            // Text without explicit color is left alone.
+            when(templates.text(text)).thenReturn(cleared);
+            assertNull(listener.plan(new ItemStack[] {reset, text}));
+
+            ItemStack copy = template(Type.COLOR, Variant.COPY), copied = item(Material.PAPER);
+            when(templates.copyFrom(Type.COLOR, text)).thenReturn(copied);
+            var plan = listener.plan(new ItemStack[] {text, null, copy});
+            assertSame(copied, plan.result());
+            assertEquals(List.of(2), plan.consumed());
+            when(templates.copyFrom(Type.COLOR, text)).thenReturn(null);
+            assertNull(listener.plan(new ItemStack[] {text, copy}));
+
+            // Only plain text templates are colored.
+            assertNull(listener.plan(new ItemStack[] {template(type, Variant.RESET), reset}));
+        }
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("stylings")
     void ingredientsStyleNameAndLoreTemplatesAlike(List<Material> materials) {

@@ -14,7 +14,8 @@ means roughly "it teaches lore itself".
 1. Make a template using the recipe table below. Recipes are shapeless and work
    in either crafting grid.
 2. Put the item you want to change in an anvil's first slot and a template in
-   the second.
+   the second. Colors templates are the exception: craft them with the item
+   instead, like a dye (see [Color and style](#color-and-style)).
 3. Take the result. One template is consumed, and the anvil charges levels
    like a rename.
 
@@ -51,16 +52,18 @@ blank paper in the recipe makes an empty line.
 ### Clear or copy a property
 
 Add **bone meal** to a template recipe to make its **Reset** version, or craft
-an existing plain template with bone meal. Use Reset templates in an anvil as
-usual to remove their property. A Colors Reset restores leather armor's default
-color; a Glowing Reset removes the forced glint (enchanted items may still
-shimmer).
+an existing plain template with bone meal. Use Name, Description and Glowing
+Reset templates in an anvil as usual to remove their property; a Glowing Reset
+removes the forced glint (enchanted items may still shimmer). Craft a Colors
+Reset with leather armor to restore its default color, or with a Name or
+Description template to clear its text color.
 
 Add an **ink sac** to a Name, Description, or Colors template recipe to make a
 **Copy** template. Glowing cannot be copied. To use one, craft it with exactly
 one item that has the property you want. The source stays in the grid; the
-result is a plain template holding the copied property. Copy templates do not
-work in an anvil.
+result is a plain template holding the copied property. A Colors Copy can also
+take the color of a Name or Description template whose text is all one color.
+Copy templates do not work in an anvil.
 
 ### Duplicate a template
 
@@ -83,13 +86,17 @@ the `loremipsum.format` permission.
 
 ## Color and style
 
-### Leather armor colors
+### Colors templates
+
+Colors templates work like a complex dye: craft one with the thing to color,
+and both are used up. With leather armor, leather horse armor, or wolf armor,
+it dyes the armor, mixing with its existing color; crafting again dyes it
+again. With a Name or Description template, it sets all of that template's
+text to the template's color. A Colors Reset does the opposite, removing the
+armor's dye or the text's color. Colors templates don't work in an anvil.
 
 Put an existing Colors template and one or more dyes in the crafting grid to
-append another dyeing step; its swatch and hex value preview the result. In an
-anvil, the template applies those steps to the leather armor's existing color.
-Reapplying it dyes the armor again. Colors templates also work as an ingredient
-with a Name or Description template to color all of that template's text.
+append another dyeing step; its swatch and hex value preview the result.
 
 ### Name and Description text
 

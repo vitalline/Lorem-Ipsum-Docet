@@ -42,7 +42,8 @@ import sys.vitae.lorem.utils.TextStyles;
  * Renaming a Name or Description template changes the name or whole description it applies instead, by the same
  * rules.
  *
- * <p>Typed templates in the second slot apply just their property, consuming one sheet.
+ * <p>Typed templates in the second slot apply just their property, consuming one sheet. Color templates are crafted
+ * onto items instead (see {@link TemplateCraftListener}).
  * Other than a Name template, these can be combined with renaming. They are priced like a rename.
  */
 public class AnvilListener implements Listener {

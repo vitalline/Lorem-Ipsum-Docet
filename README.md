@@ -17,12 +17,12 @@ For crafting recipes and player-facing instructions, see the
 All recipes below are shapeless and work in either crafting grid when they fit.
 Each occupied ingredient slot contributes one item, regardless of stack size.
 
-| Template | Recipe | Anvil effect |
+| Template | Recipe | Effect |
 | --- | --- | --- |
 | Name | One renamed sheet of paper + any nugget (iron, gold or copper) | Copies the sheet's name, including formatting, as the item's name |
 | Lore | Paper only, with at least one renamed sheet | Copies the sheets' names as description lines, in grid reading order; unrenamed sheets contribute empty lines |
 | Glint | One unrenamed sheet of paper + glowstone dust | Forces enchantment shimmer without adding enchantments |
-| Color | One unrenamed sheet of paper + one or more dyes | Dyes items supported by Paper's leather/dyeable-armor metadata |
+| Color | One unrenamed sheet of paper + one or more dyes | Crafted like a dye: dyes items supported by Paper's leather/dyeable-armor metadata, or colors a Name/Lore template's text (see [Color templates](#color-templates)) |
 
 (NB: In game, as well as in the Player Guide, Lore, Glint and Color templates
 are called Description, Glowing and Colors. For further details, see
@@ -31,10 +31,11 @@ are called Description, Glowing and Colors. For further details, see
 The Name recipe mirrors vanilla's name tag recipe; an unrenamed sheet with a
 nugget still crafts a vanilla name tag.
 
-Put the target item in the anvil's first slot and a template in the second.
-Applying a template consumes one template and costs levels like a rename. Other
-properties are retained. Name templates take precedence over the rename field;
-other templates can accompany a rename.
+To apply a Name, Lore or Glint template, put the target item in the anvil's
+first slot and the template in the second. Applying a template consumes one
+template and costs levels like a rename. Other properties are retained. Name
+templates take precedence over the rename field; other templates can accompany
+a rename. Color templates have no effect in an anvil.
 
 Craft any template, including reset and copy templates, with additional paper
 to duplicate it: one original plus two sheets produces three. Renamed sheets
@@ -63,15 +64,16 @@ produce its typed reset (`Template: Name - Reset`, and so on), or craft one
 directly by adding bone meal to the plain template's recipe. As a reset has no
 text, renamed and blank paper are interchangeable in direct recipes.
 
-| Reset | Direct recipe | Anvil effect |
+| Reset | Direct recipe | Effect |
 | --- | --- | --- |
 | Name | One sheet of paper + any nugget + bone meal | Removes the custom name |
 | Lore | Exactly two sheets of paper + bone meal | Removes the description |
 | Glint | One sheet of paper + glowstone dust + bone meal | Removes the glint override; enchanted items may still shimmer |
-| Color | One sheet of paper + one or more dyes + bone meal | Removes custom dye and restores the item's default color |
+| Color | One sheet of paper + one or more dyes + bone meal | Crafted like a dye: removes custom dye and restores the item's default color, or clears a Name/Lore template's text color |
 
-Reset templates are applied in an anvil like any other template. White dye is a
-color ingredient, not a reset ingredient.
+Name, Lore and Glint resets are applied in an anvil like any other template;
+Color resets are crafted (see [Color templates](#color-templates)). White dye is
+a color ingredient, not a reset ingredient.
 
 ### Copy templates
 
@@ -85,13 +87,15 @@ copy template: glint is just on or off.
 | --- | --- | --- |
 | Name | One sheet of paper + any nugget + ink sac | Its custom name, including formatting |
 | Lore | Exactly two sheets of paper + ink sac | Its description; a name tag's gray `Custom` marker isn't part of it |
-| Color | One sheet of paper + one or more dyes + ink sac | Its exact dye color |
+| Color | One sheet of paper + one or more dyes + ink sac | Its exact dye color, or the color shared by all of a plain Name/Lore template's text |
 
 Craft a copy template with exactly one item that has the corresponding property
 to turn it into a plain template holding that property. The source item isn't
 used up; it stays in the grid, so shift-clicking converts every copy template in
-the stack. A copied color is applied regardless of the target's dye; dyes
-crafted onto the Color template afterwards are applied on top of it.
+the stack. A Color copy template can also take its color from a plain Name or
+Lore template, if all of its text has the same explicit color; that template
+stays in the grid too. A copied color is applied regardless of the target's
+dye; dyes crafted onto the Color template afterwards are applied on top of it.
 
 Items without the property (an unnamed item for Name, say) produce nothing.
 Any single item counts as a source, even ingredients that would otherwise
@@ -132,8 +136,8 @@ turns it into an ordinary named tag.
 
 ### Text colors, decorations, and fonts
 
-Craft a Name or Lore template with one of these ingredients. The same ingredients
-can be used on a sign's targeted side by right-clicking it.
+Craft a Name or Lore template with one of these ingredients. The same
+ingredients can be used on a sign's targeted side by right-clicking it.
 
 | Ingredient | Text effect |
 | --- | --- |
@@ -156,9 +160,11 @@ Template names/lore have the usual italic default; signs do not.
 Name templates preview their name in white, like an unstyled custom name,
 instead of lore's usual purple.
 
-Several dyes can be mixed in one template craft. A Color template can also be
-crafted with a Name/Lore template to apply its preview color to all of that
-template's text. Styling consumes the input template(s) and ingredients.
+Several dyes can be mixed in one template craft. A Name/Lore template can also
+be crafted with a Color template, which applies its preview color to all of the
+text, or with a Color reset template, which clears all of the text's explicit
+color (see [Color templates](#color-templates)). Styling consumes the input
+template(s) and ingredients.
 
 Explicit formatting can look exactly like the default in a tooltip, yet differ
 once applied - for example, a name in explicit white italics previews just like
@@ -184,16 +190,30 @@ signs, signs currently being edited, and denied interactions are not modified.
 Vanilla glow-ink/ink-sac behavior remains available; text styling preserves
 the side's glow and dye.
 
-### Color recipes
+### Color templates
+
+Color templates work like a complex dye: they're crafted with what they color,
+rather than applied in an anvil. Each of these crafts consumes the Color
+template and the target, producing the recolored target.
+
+| Craft with | Plain Color template | Color reset template |
+| --- | --- | --- |
+| One dyeable item (leather armor, leather horse armor, wolf armor) | Replays its dyeing steps on the item | Removes the item's dye |
+| A plain Name/Lore template | Sets all of its text to the preview color | Clears all of its text's explicit color |
+
+Grids that wouldn't change anything (an undyed item with a reset, say) produce
+nothing, and only one item is dyed at a time. A Color copy template takes its
+color from either kind of target instead (see [Copy templates](#copy-templates)).
 
 A Color template shows a colored block swatch and its hexadecimal RGB color.
 Craft it with more dyes to append another dyeing step.
 
 The template stores the original dyes **and each recipe boundary**, not just the
-preview color. Applying it replays those recipes against the target's existing
-dye, using vanilla brightness-preserving mixing and rounding. Repeated dyes
-within a recipe retain their weight; applying the template repeatedly dyes the
-item repeatedly. An undyed target contributes no initial color.
+preview color. Dyeing an item replays those recipes against its existing dye,
+using vanilla brightness-preserving mixing and rounding. Repeated dyes within a
+recipe retain their weight; dyeing with the template repeatedly dyes the item
+repeatedly. An undyed target contributes no initial color. Text has no previous
+color to mix with, so it takes the preview color as is.
 
 ### Placed blocks
 

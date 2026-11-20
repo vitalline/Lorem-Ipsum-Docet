@@ -138,6 +138,17 @@ public final class TextStyles {
         return shared(styles);
     }
 
+    /** The color explicitly shared by all non-empty text, or null if any of it is uncolored or colored differently. */
+    public static @Nullable TextColor sharedColor(List<? extends Component> lines) {
+        List<Style> styles = new ArrayList<>();
+        for (Component line : lines) {
+            collectStyles(line, Style.empty(), styles, true);
+        }
+        TextColor color = styles.isEmpty() ? null : styles.getFirst().color();
+        return color != null && styles.stream().allMatch(style -> style.color() instanceof TextColor other
+                && other.value() == color.value()) ? color : null;
+    }
+
     private static @Nullable Style shared(List<@NonNull Style> styles) {
         if (styles.isEmpty()) {
             return Style.empty();

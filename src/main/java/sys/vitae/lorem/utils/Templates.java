@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+import org.bukkit.Color;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
@@ -271,7 +272,10 @@ public final class Templates {
         return line;
     }
 
-    /** Null means the target is incompatible or no property would change. */
+    /**
+     * The item with the template's property applied in an anvil. Null means the target is incompatible or no property
+     * would change; Color templates are crafted onto items instead (see {@link #dye}).
+     */
     public @Nullable ItemStack apply(ItemStack input, ItemStack template) {
         Kind kind = Objects.requireNonNull(kind(template));
         ItemMeta meta = input.getItemMeta();
@@ -291,10 +295,7 @@ public final class Templates {
             }
             case GLINT -> meta.setEnchantmentGlintOverride(reset ? null : true);
             case COLOR -> {
-                if (!(meta instanceof LeatherArmorMeta dyed)) {
-                    return null;
-                }
-                dyed.setColor(reset ? null : colorRecipe(template).apply(dyed.isDyed() ? dyed.getColor() : null));
+                return null;
             }
         }
         ItemStack result = input.clone();
@@ -303,13 +304,38 @@ public final class Templates {
     }
 
     /**
+     * One of the dyeable items, dyed by a plain Color template (replaying its recipe on the existing dye) or undyed by
+     * a Color Reset template. Null if it isn't dyeable or its color wouldn't change.
+     */
+    public @Nullable ItemStack dye(ItemStack input, ItemStack template) {
+        Kind kind = Objects.requireNonNull(kind(template));
+        if (kind.type() != Type.COLOR || kind.variant() == Variant.COPY
+                || !(input.getItemMeta() instanceof LeatherArmorMeta dyed)) {
+            return null;
+        }
+        dyed.setColor(kind.variant() == Variant.RESET
+                ? null : colorRecipe(template).apply(dyed.isDyed() ? dyed.getColor() : null));
+        ItemStack result = input.clone();
+        result.setAmount(1);
+        result.setItemMeta(dyed);
+        return result.isSimilar(input) ? null : result;
+    }
+
+    /**
      * A plain template of the type holding the source's corresponding property, or null if the source has none.
-     * A name tag's formatting marker isn't part of its description.
+     * A name tag's formatting marker isn't part of its description. A plain Name or Description template lends its
+     * text's color, if all of the text explicitly shares one.
      */
     public @Nullable ItemStack copyFrom(Type type, ItemStack source) {
         ItemMeta meta = source.getItemMeta();
         if (meta == null) {
             return null;
+        }
+        Kind kind = kind(source);
+        if (kind != null) {
+            TextColor color = type == Type.COLOR && kind.variant() == Variant.PLAIN && kind.type().hasText()
+                    ? TextStyles.sharedColor(text(source)) : null;
+            return color == null ? null : createColor(ColorRecipe.of(Objects.requireNonNull(Color.fromRGB(color.value()))));
         }
         return switch (type) {
             case NAME -> meta.customName() instanceof Component name ? create(Type.NAME, List.of(name)) : null;

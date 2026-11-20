@@ -1,6 +1,7 @@
 package sys.vitae.lorem.utils;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static sys.vitae.lorem.NonNullMockito.mock;
 import static sys.vitae.lorem.NonNullMockito.verify;
@@ -194,8 +195,10 @@ class TemplatesTest {
         verify(meta).lore(null);
         templates.apply(input, paper("reset_glint"));
         verify(meta).setEnchantmentGlintOverride(null);
-        templates.apply(input, paper("reset_color"));
-        verify(meta).setColor(null);
+        // Color templates are crafted onto items instead.
+        assertNull(templates.apply(input, paper("reset_color")));
+        assertNull(templates.apply(input, paper("color")));
+        verify(meta, never()).setColor(any());
         verify(meta, never()).removeEnchant(any());
 
         // A Copy template has nothing to apply until it copied a property.
@@ -241,6 +244,27 @@ class TemplatesTest {
     }
 
     @Test
+    void colorCopyTakesTheColorAllOfATextTemplateShares() {
+        Templates spy = spy(templates);
+        ItemStack copy = mock(ItemStack.class), lore = paper("lore");
+        doReturn(copy).when(spy).createColor(ColorRecipe.of(Color.fromRGB(NamedTextColor.RED.value())));
+        when(lore.getItemMeta().lore()).thenReturn(new ArrayList<Component>(List.of(
+                Component.text("a", NamedTextColor.RED).decorate(TextDecoration.BOLD),
+                Component.empty(),
+                Component.text().color(NamedTextColor.RED).append(Component.text("b")).build(),
+                TextStyles.CUSTOM_MARKER)));
+        assertSame(copy, spy.copyFrom(Type.COLOR, lore));
+        assertNull(spy.copyFrom(Type.LORE, lore));
+
+        for (List<@NonNull Component> refused : List.<List<@NonNull Component>>of(
+                List.of(Component.text("a", NamedTextColor.RED), Component.text("b", NamedTextColor.BLUE)),
+                List.of(Component.text("a", NamedTextColor.RED), Component.text("b")))) {
+            when(lore.getItemMeta().lore()).thenReturn(new ArrayList<Component>(refused));
+            assertNull(spy.copyFrom(Type.COLOR, lore));
+        }
+    }
+
+    @Test
     void colorReplaysStepsAgainstExistingDyeAndRejectsOtherItems() {
         ColorRecipe recipe = new ColorRecipe(List.of(List.of(Color.RED), List.of(Color.BLUE)));
         ItemStack color = paper("color");
@@ -254,11 +278,19 @@ class TemplatesTest {
         when(meta.isDyed()).thenReturn(true);
         when(meta.getColor()).thenReturn(Color.WHITE);
 
-        assertSame(result, templates.apply(input, color));
+        assertSame(result, templates.dye(input, color));
         verify(meta).setColor(Color.fromRGB(169, 84, 255));
+        verify(result).setAmount(1);
+
+        assertSame(result, templates.dye(input, paper("reset_color")));
+        verify(meta).setColor(null);
+        when(result.isSimilar(input)).thenReturn(true);
+        assertNull(templates.dye(input, paper("reset_color")));
+        assertNull(templates.dye(input, paper("copy_color")));
+        assertNull(templates.dye(input, paper("glint")));
 
         when(input.getItemMeta()).thenReturn(mock(ItemMeta.class));
-        assertNull(templates.apply(input, color));
+        assertNull(templates.dye(input, color));
     }
 
     @Test

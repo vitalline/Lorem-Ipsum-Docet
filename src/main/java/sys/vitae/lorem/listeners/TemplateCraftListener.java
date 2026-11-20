@@ -37,7 +37,8 @@ import sys.vitae.lorem.utils.Templates.Variant;
 import sys.vitae.lorem.utils.TextStyles;
 
 /**
- * Template composition, copying, styling, resets and copy variants in either crafting grid.
+ * Template composition, copying, styling, resets and copy variants in either crafting grid, and Color templates
+ * (re)coloring dyeable items and text templates, like a dye.
  * There is no registered recipe behind these, so taking the result is handled manually: vanilla's
  * no-recipe path would hand back the ingredients instead of consuming them.
  */
@@ -156,6 +157,7 @@ public class TemplateCraftListener implements Listener {
     Plan plan(ItemStack[] matrix) {
         List<Integer> used = new ArrayList<>();
         List<ItemStack> marked = new ArrayList<>();
+        List<Integer> markedSlots = new ArrayList<>();
         List<ItemStack> sheets = new ArrayList<>();
         List<ItemStack> ingredients = new ArrayList<>();
         List<Integer> ingredientSlots = new ArrayList<>();
@@ -167,6 +169,7 @@ public class TemplateCraftListener implements Listener {
             used.add(i);
             if (templates.kind(item) != null) {
                 marked.add(item);
+                markedSlots.add(i);
             } else if (templates.isSheet(item)) {
                 sheets.add(item);
             } else {
@@ -197,18 +200,7 @@ public class TemplateCraftListener implements Listener {
             return new Plan(copies, used);
         }
         if (marked.size() == 2 && sheets.isEmpty() && ingredients.isEmpty()) {
-            ItemStack text = null, color = null;
-            for (ItemStack item : marked) {
-                Kind kind = Objects.requireNonNull(templates.kind(item));
-                if (kind.variant() == Variant.PLAIN && kind.type().hasText()) {
-                    text = item;
-                } else if (kind.variant() == Variant.PLAIN && kind.type() == Type.COLOR) {
-                    color = item;
-                }
-            }
-            return text != null && color != null
-                    ? new Plan(templates.withText(text, color(templates.text(text), templates.colorRecipe(color))), used)
-                    : null;
+            return colorText(marked, markedSlots, used);
         }
         if (marked.size() == 1 && sheets.isEmpty() && !ingredients.isEmpty()) {
             ItemStack template = marked.getFirst();
@@ -222,6 +214,12 @@ public class TemplateCraftListener implements Listener {
                 List<Integer> consumed = new ArrayList<>(used);
                 consumed.remove(ingredientSlots.getFirst());
                 return new Plan(copy, consumed);
+            }
+            if (kind.type() == Type.COLOR && ingredients.size() == 1) {
+                ItemStack dyed = templates.dye(ingredients.getFirst(), template);
+                if (dyed != null) {
+                    return new Plan(dyed, used);
+                }
             }
             if (kind.variant() != Variant.PLAIN) {
                 return null;
@@ -283,6 +281,43 @@ public class TemplateCraftListener implements Listener {
     private static Component sheetLine(ItemStack sheet) {
         ItemMeta meta = sheet.getItemMeta();
         return meta.hasCustomName() ? meta.customName() : Component.empty();
+    }
+
+    /**
+     * A plain Name or Description template with a Color template: a plain one recolors all the text, a Reset clears
+     * its color, and a Copy takes the color the text shares, leaving the text template in the grid.
+     */
+    private @Nullable Plan colorText(List<ItemStack> marked, List<Integer> slots, List<Integer> used) {
+        int textIndex = -1;
+        ItemStack color = null;
+        Variant variant = null;
+        for (int i = 0; i < marked.size(); i++) {
+            Kind kind = Objects.requireNonNull(templates.kind(marked.get(i)));
+            if (kind.variant() == Variant.PLAIN && kind.type().hasText()) {
+                textIndex = i;
+            } else if (kind.type() == Type.COLOR) {
+                color = marked.get(i);
+                variant = kind.variant();
+            }
+        }
+        if (textIndex < 0 || color == null) {
+            return null;
+        }
+        ItemStack text = marked.get(textIndex);
+        return switch (Objects.requireNonNull(variant)) {
+            case PLAIN -> new Plan(templates.withText(text, color(templates.text(text), templates.colorRecipe(color))), used);
+            case RESET -> {
+                List<@NonNull Component> original = templates.text(text);
+                List<@NonNull Component> cleared = TextStyles.color(original, null);
+                yield cleared.equals(original) ? null : new Plan(templates.withText(text, cleared), used);
+            }
+            case COPY -> {
+                ItemStack copy = templates.copyFrom(Type.COLOR, text);
+                List<Integer> consumed = new ArrayList<>(used);
+                consumed.remove(slots.get(textIndex));
+                yield copy == null ? null : new Plan(copy, consumed);
+            }
+        };
     }
 
     private boolean isPlainLore(ItemStack template) {
