@@ -114,6 +114,8 @@ class RecipeRegistryTest {
         assertInstanceOf(RecipeChoice.PredicateChoice.class, secondSheet);
         assertFalse(secondSheet.test(paper));
         assertEquals(List.of(Material.PAPER), materials(byName.get("template_lore_reset"), 'I'));
+        verify(templates).create(Templates.Type.NAME,
+                List.of(Component.translatable("mco.backup.entry.name", "Name")));
         verify(templates).create(Templates.Type.LORE, List.of(numbered(1), numbered(2)));
 
         ShapedRecipe color = byName.get("template_color_red_dye");

@@ -53,7 +53,8 @@ public final class RecipeRegistry implements Listener {
     }
 
     public void registerAll() {
-        registerBase("template_name", "", Type.NAME, templates.create(Type.NAME, List.of(Component.text("Name"))),
+        registerBase("template_name", "", Type.NAME,
+                templates.create(Type.NAME, List.of(Component.translatable("mco.backup.entry.name", "Name"))),
                 NUGGETS, List.of(Component.translatable("mco.backup.entry.name", "Name")));
         List<@NonNull Component> lines = List.of(numbered(1), numbered(2));
         registerBase("template_lore", "", Type.LORE, templates.create(Type.LORE, lines), List.of(Material.PAPER),
