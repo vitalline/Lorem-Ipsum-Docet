@@ -6,7 +6,7 @@
 
     <groupId>com.vitae.lorem</groupId>
     <artifactId>LoremIpsumDocet</artifactId>
-    <version>0.2.2-SNAPSHOT</version>
+    <version>0.2.3-SNAPSHOT</version>
     
     <name>Lorem Ipsum Docet</name>
     <url></url>
