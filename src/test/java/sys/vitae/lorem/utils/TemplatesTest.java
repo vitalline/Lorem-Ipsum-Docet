@@ -92,6 +92,24 @@ class TemplatesTest {
     }
 
     @Test
+    void everyTemplateGlints() {
+        for (Type type : Type.values()) {
+            for (Variant variant : Variant.values()) {
+                if (variant == Variant.COPY && !type.isCopyable()) {
+                    continue;
+                }
+                ItemMeta meta = mock(ItemMeta.class);
+                when(meta.getPersistentDataContainer()).thenReturn(mock(PersistentDataContainer.class));
+                try (var _ = mockConstruction(ItemStack.class,
+                        (item, _) -> when(item.getItemMeta()).thenReturn(meta))) {
+                    templates.create(new Kind(type, variant));
+                }
+                verify(meta).setEnchantmentGlintOverride(true);
+            }
+        }
+    }
+
+    @Test
     void nameTextPreviewsLikeACustomNameButAppliesUnchanged() {
         Component plain = Component.text("a name");
         ItemStack template = paper("name"), copy = paper("name");

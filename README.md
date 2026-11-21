@@ -28,6 +28,8 @@ Each occupied ingredient slot contributes one item, regardless of stack size.
 are called Description, Glowing and Colors. For further details, see
 [Identification and translation](#identification-and-translation).)
 
+All templates have enchantment shimmer, so they stand out from ordinary paper.
+
 The Name recipe mirrors vanilla's name tag recipe; an unrenamed sheet with a
 nugget still crafts a vanilla name tag.
 

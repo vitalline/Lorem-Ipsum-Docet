@@ -196,9 +196,7 @@ public final class Templates {
         meta.itemName(Component.translatable("options.generic_value", "%s: %s",
                 Component.translatable("mco.template.name", "Template"), kind.variant().label(kind.type().label)));
         meta.getPersistentDataContainer().set(idKey, PersistentDataType.STRING, kind.id());
-        if (kind.type() == Type.GLINT && kind.variant() == Variant.PLAIN) {
-            meta.setEnchantmentGlintOverride(true);
-        }
+        meta.setEnchantmentGlintOverride(true);
         template.setItemMeta(meta);
         return template;
     }

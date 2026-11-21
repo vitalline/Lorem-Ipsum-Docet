@@ -47,7 +47,8 @@ before unlocking it.
 "Blank paper" means ordinary paper without a custom name. The Name recipe uses
 renamed paper; with blank paper and a nugget, vanilla makes a name tag instead.
 For a Description, each paper becomes a line in crafting-grid reading order;
-blank paper in the recipe makes an empty line.
+blank paper in the recipe makes an empty line. Every template shimmers, so it's
+easy to tell apart from ordinary paper.
 
 ### Clear or copy a property
 
