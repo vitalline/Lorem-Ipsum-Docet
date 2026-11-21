@@ -195,9 +195,7 @@ public class TemplateCraftListener implements Listener {
             return new Plan(templates.create(Type.LORE, lore), used);
         }
         if (marked.size() == 1 && !sheets.isEmpty() && ingredients.isEmpty()) {
-            ItemStack copies = marked.getFirst().clone();
-            copies.setAmount(sheets.size() + 1);
-            return new Plan(copies, used);
+            return new Plan(templates.copies(marked.getFirst(), sheets.size() + 1), used);
         }
         if (marked.size() == 2 && sheets.isEmpty() && ingredients.isEmpty()) {
             return colorText(marked, markedSlots, used);

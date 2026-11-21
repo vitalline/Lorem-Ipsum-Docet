@@ -171,6 +171,49 @@ class TemplatesTest {
     }
 
     @Test
+    void craftingOrRenamingAnOldTemplateGivesItGlint() {
+        ItemStack template = paper("lore"), copies = paper("lore"), styled = paper("lore"), renamed = paper("lore");
+        when(template.clone()).thenReturn(copies, styled, renamed);
+
+        assertSame(copies, templates.copies(template, 3));
+        ItemMeta meta = copies.getItemMeta();
+        verify(copies).setAmount(3);
+        verify(meta).setEnchantmentGlintOverride(true);
+        verify(copies).setItemMeta(meta);
+
+        assertSame(styled, templates.withText(template, List.of(Component.text("styled"))));
+        verify(styled.getItemMeta()).setEnchantmentGlintOverride(true);
+
+        assertSame(renamed, templates.retext(template, List.of(Component.text("renamed"))));
+        verify(renamed.getItemMeta()).setEnchantmentGlintOverride(true);
+    }
+
+    @Test
+    void glowingTemplatesDontApplyToWhatAlwaysGlints() {
+        Templates spy = spy(templates);
+        ItemStack star = mock(ItemStack.class), tag = mock(ItemStack.class);
+        when(star.getItemMeta()).thenReturn(mock(ItemMeta.class));
+        doReturn(true).when(spy).glintsByDefault(star);
+        ItemMeta tagMeta = mock(ItemMeta.class);
+        PersistentDataContainer tagData = mock(PersistentDataContainer.class);
+        when(tag.getType()).thenReturn(Material.NAME_TAG);
+        when(tag.getAmount()).thenReturn(1);
+        when(tag.getItemMeta()).thenReturn(tagMeta);
+        when(tagMeta.getPersistentDataContainer()).thenReturn(tagData);
+        when(tagData.get(nameTagKey, Objects.requireNonNull(PersistentDataType.STRING))).thenReturn("reset");
+
+        for (ItemStack input : List.of(star, tag, paper("name"), paper("reset_glint"))) {
+            for (String glint : List.of("glint", "reset_glint")) {
+                assertNull(spy.apply(input, paper(glint)));
+                verify(input.getItemMeta(), never()).setEnchantmentGlintOverride(any());
+            }
+        }
+        // Other templates still apply to them.
+        when(star.clone()).thenReturn(mock(ItemStack.class));
+        assertNotNull(spy.apply(star, paper("reset_name")));
+    }
+
+    @Test
     void nameAndLoreApplyOnlyTheirOwnProperty() {
         ItemStack input = mock(ItemStack.class), result = mock(ItemStack.class);
         ItemMeta meta = mock(ItemMeta.class);
@@ -202,10 +245,12 @@ class TemplatesTest {
 
     @Test
     void resetsRemoveOnlyTheCorrespondingOverride() {
+        Templates templates = spy(this.templates);
         ItemStack input = mock(ItemStack.class), result = mock(ItemStack.class);
         LeatherArmorMeta meta = mock(LeatherArmorMeta.class);
         when(input.getItemMeta()).thenReturn(meta);
         when(input.clone()).thenReturn(result);
+        doReturn(false).when(templates).glintsByDefault(input);
 
         templates.apply(input, paper("reset_name"));
         verify(meta).customName(null);

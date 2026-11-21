@@ -15,6 +15,7 @@ import org.bukkit.plugin.Plugin;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+import io.papermc.paper.datacomponent.DataComponentTypes;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -230,7 +231,10 @@ public final class Templates {
         return isName(template) ? Objects.requireNonNull(text.stream().map(Templates::unwrapPreview).toList()) : text;
     }
 
-    /** Like name tags, text templates with any explicit formatting get the {@link TextStyles#CUSTOM_MARKER}. */
+    /**
+     * Like name tags, text templates with any explicit formatting get the {@link TextStyles#CUSTOM_MARKER}.
+     * Templates from before every template glinted get their glint.
+     */
     public @NonNull ItemStack withText(ItemStack template, List<? extends Component> text) {
         boolean name = isName(template);
         ItemStack result = template.clone();
@@ -238,6 +242,7 @@ public final class Templates {
         ItemMeta meta = result.getItemMeta();
         meta.lore(TextStyles.marked(name ? text.stream().map(Templates::wrapPreview).toList() : text,
                 text.stream().anyMatch(TextStyles::isFormatted)));
+        meta.setEnchantmentGlintOverride(true);
         result.setItemMeta(meta);
         return result;
     }
@@ -247,6 +252,16 @@ public final class Templates {
         ItemStack result = withText(template, text);
         result.setAmount(template.getAmount());
         return result;
+    }
+
+    /** Copies of the template; templates from before every template glinted get their glint. */
+    public @NonNull ItemStack copies(ItemStack template, int amount) {
+        ItemStack copies = template.clone();
+        copies.setAmount(amount);
+        ItemMeta meta = copies.getItemMeta();
+        meta.setEnchantmentGlintOverride(true);
+        copies.setItemMeta(meta);
+        return copies;
     }
 
     private boolean isName(ItemStack template) {
@@ -272,12 +287,15 @@ public final class Templates {
 
     /**
      * The item with the template's property applied in an anvil. Null means the target is incompatible or no property
-     * would change; Color templates are crafted onto items instead (see {@link #dye}).
+     * would change. Glowing templates, like their Resets, don't apply to anything that always glints: templates,
+     * resetting or copying name tags, and items that glint by default. Color templates are crafted onto items instead
+     * (see {@link #dye}).
      */
     public @Nullable ItemStack apply(ItemStack input, ItemStack template) {
         Kind kind = Objects.requireNonNull(kind(template));
         ItemMeta meta = input.getItemMeta();
-        if (meta == null || kind.variant() == Variant.COPY) {
+        if (meta == null || kind.variant() == Variant.COPY
+                || kind.type() == Type.GLINT && (kind(input) != null || nameTagVariant(input) != null || glintsByDefault(input))) {
             return null;
         }
         boolean reset = kind.variant() == Variant.RESET;
@@ -347,6 +365,11 @@ public final class Templates {
                     ? createColor(ColorRecipe.of(dyed.getColor())) : null;
             case GLINT -> null;
         };
+    }
+
+    /** Whether the item's type glints even without enchantments, like a nether star or an enchanted golden apple. */
+    boolean glintsByDefault(ItemStack item) {
+        return Boolean.TRUE.equals(item.getType().getDefaultData(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE));
     }
 
     private static boolean isPaper(@NonNull ItemStack item) {

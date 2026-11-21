@@ -308,11 +308,9 @@ class TemplateCraftListenerTest {
                 }
                 boolean concatenates = type == Type.LORE && variant == Variant.PLAIN;
                 ItemStack template = template(type, variant);
-                when(template.clone()).thenReturn(result);
+                when(templates.copies(template, 3)).thenReturn(result);
                 ItemStack paper = concatenates ? sheet(null) : sheet(Component.text("ignored"));
                 assertSame(result, listener.plan(new ItemStack[] {template, sheet(null), paper}).result());
-                verify(result).setAmount(3);
-                clearInvocations(result);
                 if (!concatenates) {
                     assertNull(listener.plan(new ItemStack[] {template, template}));
                 }
@@ -395,7 +393,7 @@ class TemplateCraftListenerTest {
     @Test
     void creativeMiddleClickPicksAFullStackWithoutCrafting() {
         ItemStack template = template(Type.NAME, Variant.PLAIN), copies = item(Material.PAPER), stack = item(Material.PAPER);
-        when(template.clone()).thenReturn(copies);
+        when(templates.copies(template, 2)).thenReturn(copies);
         when(copies.clone()).thenReturn(stack);
         when(stack.getMaxStackSize()).thenReturn(64);
         ItemStack[] matrix = {template, sheet(null)};

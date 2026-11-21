@@ -21,7 +21,9 @@ means roughly "it teaches lore itself".
 
 Each occupied ingredient slot uses one item, no matter how many are in its
 stack. A Name template takes precedence over the anvil's rename field; other
-templates can be combined with a rename.
+templates can be combined with a rename. Glowing templates, including their
+Resets, don't work on things that always shimmer: templates, Reset and Copy
+name tags, and items that shimmer on their own, like nether stars.
 
 ## Make templates
 

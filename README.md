@@ -37,7 +37,9 @@ To apply a Name, Lore or Glint template, put the target item in the anvil's
 first slot and the template in the second. Applying a template consumes one
 template and costs levels like a rename. Other properties are retained. Name
 templates take precedence over the rename field; other templates can accompany
-a rename. Color templates have no effect in an anvil.
+a rename. Color templates have no effect in an anvil. Glint templates and their
+resets don't apply to anything that always shimmers: templates, name reset and
+copy tags, and items that shimmer by default (like nether stars).
 
 Craft any template, including reset and copy templates, with additional paper
 to duplicate it: one original plus two sheets produces three. Renamed sheets
