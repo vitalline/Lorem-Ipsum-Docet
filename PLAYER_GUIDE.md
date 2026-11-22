@@ -30,14 +30,20 @@ name tags, and items that shimmer on their own, like nether stars.
 The recipe book shows example layouts: paper on the left, the template
 ingredient on the right, and any Reset or Copy modifier below the paper.
 These are references: place the ingredients yourself in any order.
-Mixed-dye recipes aren't listed.
+Mixed-dye recipes aren't listed. Styling entries instead show a Name template
+on the left and a decoration or font ingredient on the right; they work the
+same on Description templates (see [Name and Description text](#name-and-description-text)).
 
 Recipes unlock as you collect ingredients: holding paper and an entry's
 ingredient unlocks it, so paper alone unlocks Description, a nugget unlocks
 Name, glowstone dust unlocks Glowing, and a dye unlocks that dye's Colors
 entry. Once you know a base recipe, bone meal unlocks its Reset entry and an
-ink sac unlocks its Copy entry, if it has one. You can craft any of these
-before unlocking it.
+ink sac unlocks its Copy entry, if it has one. Holding a Name or Description
+template and a decoration or font ingredient unlocks that ingredient's styling
+entry.
+
+Unlocking only adds an entry to the recipe book: you can use any of the
+recipes before unlocking their entries.
 
 | Template | Recipe |
 | --- | --- |

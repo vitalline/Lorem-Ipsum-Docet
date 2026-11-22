@@ -30,14 +30,18 @@ import org.bukkit.inventory.Recipe;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.jspecify.annotations.NonNull;
 import org.mockito.ArgumentCaptor;
 
 import io.papermc.paper.event.player.PlayerInventorySlotChangeEvent;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextDecoration;
 
 class RecipeRegistryTest {
 
@@ -46,6 +50,7 @@ class RecipeRegistryTest {
     private final Server server = mock(Server.class);
     private final @NonNull ItemStack paper = stack(Material.PAPER);
     private final @NonNull ItemStack tag = stack(Material.NAME_TAG);
+    private final @NonNull ItemStack water = potion(PotionType.WATER);
     private final Templates templates = mock(Templates.class);
     private final Player online = mock(Player.class);
     private RecipeRegistry registry;
@@ -82,6 +87,12 @@ class RecipeRegistryTest {
                 })) {
             items.when(() -> ItemStack.of(Material.PAPER)).thenReturn(paper);
             items.when(() -> ItemStack.of(Material.NAME_TAG)).thenReturn(tag);
+            for (Material styling : List.of(Material.END_ROD, Material.COAL, Material.STRING, Material.STICK,
+                    Material.FEATHER, Material.EXPERIENCE_BOTTLE, Material.BOOK, Material.OMINOUS_BOTTLE)) {
+                ItemStack ingredient = stack(styling);
+                items.when(() -> ItemStack.of(styling)).thenReturn(ingredient);
+            }
+            items.when(() -> ItemStack.of(Material.POTION)).thenReturn(water);
             registry.registerAll();
         }
     }
@@ -130,6 +141,24 @@ class RecipeRegistryTest {
                     && materials(recipe, 'I').size() == 1));
             assertEquals(16, group.stream().map(recipe -> materials(recipe, 'I').getFirst()).distinct().count());
         }
+
+        // The styling entries share one group; each result is what crafting the example would actually make.
+        ShapedRecipe bold = byName.get("template_name_style_coal");
+        assertEquals(9, entries.stream().filter(recipe -> recipe.getGroup().equals(bold.getGroup())).count());
+        assertArrayEquals(new String[] {"PI"}, bold.getShape());
+        assertEquals(List.of(Material.COAL, Material.CHARCOAL), materials(bold, 'I'));
+        Component example = Component.text("Lorem Ipsum Docet");
+        Component galactic = example.font(Key.key("alt"));
+        verify(templates).create(Templates.Type.NAME, List.of(example));
+        verify(templates).create(Templates.Type.NAME, List.of(example.decorate(TextDecoration.BOLD)));
+        // Custom names are italic by default, so a feather turns that off.
+        verify(templates).create(Templates.Type.NAME, List.of(example.decoration(TextDecoration.ITALIC, false)));
+        // Restoring the regular font is shown from another one; the second call is the water bottle's example.
+        verify(templates, times(2)).create(Templates.Type.NAME, List.of(galactic));
+        verify(templates).create(Templates.Type.NAME, List.of(example.font(Key.key("default"))));
+        RecipeChoice waterChoice = byName.get("template_name_style_water_bottle").getChoiceMap().get('I');
+        assertInstanceOf(RecipeChoice.PredicateChoice.class, waterChoice);
+        assertFalse(waterChoice.test(water));
         for (ShapedRecipe entry : entries) {
             RecipeChoice first = entry.getChoiceMap().get('P');
             assertFalse(first.test(paper), entry.getKey().toString());
@@ -200,6 +229,27 @@ class RecipeRegistryTest {
         assertEquals(keys("nametag_copy"), book);
     }
 
+    @Test
+    void stylingEntriesNeedAPlainTextTemplateAndTheirIngredient() {
+        Player player = mock(Player.class);
+        var book = recipeBook(player);
+        var inventory = inventory(player);
+        ItemStack template = stack(Material.PAPER), charcoal = stack(Material.CHARCOAL);
+        ItemStack strength = potion(PotionType.STRENGTH);
+        when(templates.kind(template)).thenReturn(new Templates.Kind(Templates.Type.NAME, Templates.Variant.RESET));
+        when(inventory.getContents()).thenReturn(new ItemStack[] {template, charcoal, strength});
+        inventoryChange(player, charcoal);
+        assertTrue(book.isEmpty());
+
+        when(templates.kind(template)).thenReturn(new Templates.Kind(Templates.Type.LORE, Templates.Variant.PLAIN));
+        inventoryChange(player, template);
+        assertEquals(keys("template_name_style_coal"), book);
+
+        when(inventory.getContents()).thenReturn(new ItemStack[] {template, water});
+        inventoryChange(player, water);
+        assertEquals(keys("template_name_style_coal", "template_name_style_water_bottle"), book);
+    }
+
     private void inventoryChange(@NonNull Player player, @NonNull ItemStack added) {
         PlayerInventorySlotChangeEvent event = mock(PlayerInventorySlotChangeEvent.class);
         when(event.getPlayer()).thenReturn(player);
@@ -235,6 +285,15 @@ class RecipeRegistryTest {
         ItemStack stack = mock(ItemStack.class);
         when(stack.getType()).thenReturn(Objects.requireNonNull(material));
         return stack;
+    }
+
+    private static @NonNull ItemStack potion(PotionType type) {
+        ItemStack potion = stack(Material.POTION);
+        PotionMeta meta = mock(PotionMeta.class);
+        when(potion.getItemMeta()).thenReturn(meta);
+        when(meta.getBasePotionType()).thenReturn(type);
+        when(potion.clone()).thenReturn(potion);
+        return potion;
     }
 
     private static Component numbered(int number) {

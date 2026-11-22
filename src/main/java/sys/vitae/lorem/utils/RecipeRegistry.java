@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import org.bukkit.DyeColor;
 import org.bukkit.Material;
@@ -18,8 +19,10 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.ShapedRecipe;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.inventory.recipe.CraftingBookCategory;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionType;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -35,15 +38,29 @@ public final class RecipeRegistry implements Listener {
             List.of(Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.COPPER_NUGGET);
     private static final List<@NonNull Material> DYES = Arrays.stream(DyeColor.values())
             .map(dye -> Material.valueOf(dye.name() + "_DYE")).toList();
+    /** Each decoration's and non-regular font's ingredients; a water bottle's regular font is listed separately. */
+    private static final List<List<Material>> STYLINGS = List.of(List.of(Material.END_ROD),
+            List.of(Material.COAL, Material.CHARCOAL), List.of(Material.STRING), List.of(Material.STICK),
+            List.of(Material.FEATHER), List.of(Material.EXPERIENCE_BOTTLE), List.of(Material.BOOK),
+            List.of(Material.OMINOUS_BOTTLE));
+    /**
+     * The styling examples' name. It isn't translated: the enchanting-table and illager fonts only have glyphs for
+     * ASCII letters (and spaces).
+     */
+    private static final @NonNull Component STYLING_EXAMPLE = Objects.requireNonNull(Component.text("Lorem Ipsum Docet"));
 
     /** A base recipe, unlocked by holding a sheet and any of its ingredients, and its Reset and Copy entries. */
     private record Base(String key, List<Material> ingredients, String reset, @Nullable String copy) {}
+
+    /** A styling entry, unlocked by holding a Name or Description template and a matching ingredient. */
+    private record Styling(String key, Predicate<ItemStack> ingredient) {}
 
     private final Plugin plugin;
     private final Templates templates;
     private final List<ShapedRecipe> entries = new ArrayList<>();
     private final Map<String, NamespacedKey> registered = new HashMap<>();
     private final List<Base> bases = new ArrayList<>();
+    private final List<Styling> stylings = new ArrayList<>();
     private final EnumSet<Material> triggers =
             EnumSet.of(Material.PAPER, Material.BONE_MEAL, Material.INK_SAC, Material.NAME_TAG);
 
@@ -63,10 +80,11 @@ public final class RecipeRegistry implements Listener {
                 List.of(Material.GLOWSTONE_DUST), List.of());
         for (Material material : DYES) {
             var dye = Objects.requireNonNull(TextStyles.dye(material));
-            registerBase("template_color", dyeSuffix(material), Type.COLOR,
+            registerBase("template_color", suffix(material), Type.COLOR,
                     templates.createColor(new ColorRecipe(List.of(List.of(dye.getColor())))), List.of(material),
                     List.of());
         }
+        registerStylings();
         register("nametag_reset", "nametag_reset", templates.createNameTag(Variant.RESET),
                 ItemStack.of(Material.NAME_TAG), new RecipeChoice.MaterialChoice(Material.BONE_MEAL), null);
         register("nametag_copy", "nametag_copy", templates.createNameTag(Variant.COPY),
@@ -102,7 +120,9 @@ public final class RecipeRegistry implements Listener {
             return;
         }
         var materials = EnumSet.noneOf(Material.class);
+        List<ItemStack> held = new ArrayList<>();
         boolean sheet = false;
+        boolean textTemplate = false;
         boolean unnamedTag = false;
         for (ItemStack item : player.getInventory().getContents()) {
             if (item == null || item.isEmpty()) {
@@ -110,8 +130,11 @@ public final class RecipeRegistry implements Listener {
             }
             Material material = Objects.requireNonNull(item.getType());
             materials.add(material);
+            held.add(item);
             if (material == Material.PAPER) {
                 sheet |= templates.isSheet(item);
+                textTemplate |= templates.kind(item) instanceof Kind kind && kind.variant() == Variant.PLAIN
+                        && kind.type().hasText();
             } else if (material == Material.NAME_TAG) {
                 unnamedTag |= !item.getItemMeta().hasCustomName() && templates.nameTagVariant(item) == null;
             }
@@ -123,6 +146,13 @@ public final class RecipeRegistry implements Listener {
             for (Base base : bases) {
                 if (base.ingredients().stream().anyMatch(materials::contains)) {
                     queue(player, pending, base.key());
+                }
+            }
+        }
+        if (textTemplate) {
+            for (Styling styling : stylings) {
+                if (held.stream().anyMatch(styling.ingredient())) {
+                    queue(player, pending, styling.key());
                 }
             }
         }
@@ -172,14 +202,43 @@ public final class RecipeRegistry implements Listener {
         }
     }
 
-    private static String dyeSuffix(Material dye) {
-        return "_" + dye.getKey().getKey();
+    private static String suffix(Material material) {
+        return "_" + material.getKey().getKey();
     }
 
     /** An example sheet name like "Description 1", using the "Strength II" pattern so translations order it. */
     private static @NonNull Component numbered(int number) {
         return Objects.requireNonNull(Component.translatable("potion.withAmplifier", "%s %s",
                 Component.translatable("mco.backup.entry.description", "Description"), Component.text(number)));
+    }
+
+    /**
+     * One entry per styling ingredient, showing the Name template it would craft from an example one. A water bottle's
+     * example starts in the enchanting-table font, as restoring the regular font wouldn't show a change otherwise.
+     */
+    private void registerStylings() {
+        List<@NonNull Component> name = List.of(STYLING_EXAMPLE);
+        ItemStack example = templates.create(Type.NAME, name);
+        for (List<Material> ingredients : STYLINGS) {
+            Material material = Objects.requireNonNull(ingredients.getFirst());
+            registerStyling(suffix(material), example, name, ItemStack.of(material),
+                    new RecipeChoice.MaterialChoice(ingredients), item -> ingredients.contains(item.getType()));
+            triggers.addAll(ingredients);
+        }
+        List<@NonNull Component> galactic = TextStyles.apply(name, ItemStack.of(Material.EXPERIENCE_BOTTLE), true);
+        ItemStack water = ItemStack.of(Material.POTION);
+        water.editMeta(PotionMeta.class, meta -> meta.setBasePotionType(PotionType.WATER));
+        registerStyling("_water_bottle", templates.create(Type.NAME, galactic), galactic, water, example(water),
+                TextStyles::isWaterBottle);
+        triggers.add(Material.POTION);
+    }
+
+    private void registerStyling(String suffix, ItemStack template, List<@NonNull Component> name,
+            ItemStack ingredient, RecipeChoice choice, Predicate<ItemStack> unlocks) {
+        String key = "template_name_style" + suffix;
+        register(key, "template_name_style", templates.create(Type.NAME, TextStyles.apply(name, ingredient, true)),
+                template, choice, null);
+        stylings.add(new Styling(key, unlocks));
     }
 
     /**
