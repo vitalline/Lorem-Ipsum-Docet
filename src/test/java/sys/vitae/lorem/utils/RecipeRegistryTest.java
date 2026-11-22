@@ -130,16 +130,31 @@ class RecipeRegistryTest {
         verify(templates).create(Templates.Type.LORE, List.of(numbered(1), numbered(2)));
 
         ShapedRecipe color = byName.get("template_color_red_dye");
-        ShapedRecipe colorReset = byName.get("template_color_reset_red_dye");
-        ShapedRecipe colorCopy = byName.get("template_color_copy_red_dye");
-        assertEquals(3, List.of(color.getGroup(), colorReset.getGroup(), colorCopy.getGroup()).stream()
-                .distinct().count());
-        for (ShapedRecipe example : List.of(color, colorReset, colorCopy)) {
-            var group = entries.stream().filter(recipe -> recipe.getGroup().equals(example.getGroup())).toList();
-            assertEquals(16, group.size());
-            assertTrue(group.stream().allMatch(recipe -> recipe.getCategory() == example.getCategory()
-                    && materials(recipe, 'I').size() == 1));
-            assertEquals(16, group.stream().map(recipe -> materials(recipe, 'I').getFirst()).distinct().count());
+        var colors = entries.stream().filter(recipe -> recipe.getGroup().equals(color.getGroup())).toList();
+        assertEquals(16, colors.size());
+        assertTrue(colors.stream().allMatch(recipe -> recipe.getCategory() == color.getCategory()
+                && materials(recipe, 'I').size() == 1));
+        assertEquals(16, colors.stream().map(recipe -> materials(recipe, 'I').getFirst()).distinct().count());
+        // Reset and Copy are one entry each, cycling through every dye like the bold entry's coal and charcoal.
+        ShapedRecipe colorReset = byName.get("template_color_reset");
+        ShapedRecipe colorCopy = byName.get("template_color_copy");
+        for (ShapedRecipe variant : List.of(colorReset, colorCopy)) {
+            assertEquals(16, materials(variant, 'I').stream().distinct().count());
+            assertTrue(materials(variant, 'I').contains(Material.RED_DYE));
+        }
+        assertFalse(byName.keySet().stream().anyMatch(key -> key.startsWith("template_color_reset_")
+                || key.startsWith("template_color_copy_")));
+
+        // Every Reset entry, then every Copy entry, follows the stylings, grouped by modifier with the name tag's.
+        List<String> order = entries.stream().map(recipe -> recipe.getKey().getKey()).toList();
+        assertEquals(List.of("template_name_reset", "template_lore_reset", "template_glint_reset",
+                "template_color_reset", "nametag_reset", "template_name_copy", "template_lore_copy",
+                "template_color_copy", "nametag_copy"), order.subList(order.size() - 9, order.size()));
+        assertTrue(order.indexOf("template_name_style_feather") < order.indexOf("template_name_reset"));
+        for (String modifier : List.of("reset", "copy")) {
+            assertEquals(Set.of(NAMESPACE + ":" + modifier), entries.stream()
+                    .filter(recipe -> recipe.getKey().getKey().endsWith("_" + modifier))
+                    .map(recipe -> recipe.getGroup()).collect(Collectors.toSet()));
         }
 
         // The styling entries share one group; each result is what crafting the example would actually make.
@@ -169,9 +184,9 @@ class RecipeRegistryTest {
     }
 
     @Test
-    void joiningWithBlankPaperUnlocksDescriptionAndANuggetUnlocksName() {
+    void joiningUnlocksBasesForHeldSheetsAndTheirVariantEntries() {
         ItemStack template = stack(Material.PAPER), nugget = stack(Material.GOLD_NUGGET);
-        ItemStack boneMeal = stack(Material.BONE_MEAL);
+        ItemStack boneMeal = stack(Material.BONE_MEAL), ink = stack(Material.INK_SAC);
         Player joining = mock(Player.class);
         var book = recipeBook(joining);
         var inventory = inventory(joining);
@@ -181,13 +196,16 @@ class RecipeRegistryTest {
         registry.onPlayerJoin(join);
         assertTrue(book.isEmpty());
 
-        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, boneMeal});
+        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, boneMeal, ink});
         registry.onPlayerJoin(join);
-        assertEquals(keys("template_lore", "template_lore_reset"), book);
+        assertEquals(keys("template_lore", "template_lore_reset", "template_lore_copy"), book);
 
-        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, nugget, boneMeal});
+        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, nugget, boneMeal, ink});
         inventoryChange(joining, nugget);
-        assertEquals(keys("template_lore", "template_lore_reset", "template_name", "template_name_reset"), book);
+        assertEquals(keys(
+            "template_lore", "template_lore_reset", "template_lore_copy",
+            "template_name", "template_name_reset", "template_name_copy"
+        ), book);
     }
 
     @Test
@@ -196,19 +214,39 @@ class RecipeRegistryTest {
         var book = recipeBook(player);
         var inventory = inventory(player);
         ItemStack glowstone = stack(Material.GLOWSTONE_DUST), red = stack(Material.RED_DYE);
-        ItemStack ink = stack(Material.INK_SAC);
+        ItemStack blue = stack(Material.BLUE_DYE), green = stack(Material.GREEN_DYE), ink = stack(Material.INK_SAC);
         when(inventory.getContents()).thenReturn(new ItemStack[] {red, glowstone, ink});
         inventoryChange(player, red);
         assertTrue(book.isEmpty());
 
-        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, red, glowstone});
+        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, red, blue, glowstone});
         inventoryChange(player, paper);
-        assertEquals(keys("template_color_red_dye", "template_glint", "template_lore"), book);
+        assertEquals(keys("template_color_red_dye", "template_color_blue_dye", "template_glint", "template_lore"),
+                book);
 
+        // Both known dyes lead to the same shared Copy entry, which is unlocked once.
         when(inventory.getContents()).thenReturn(new ItemStack[] {ink});
         inventoryChange(player, ink);
-        assertEquals(keys("template_color_red_dye", "template_glint", "template_lore",
-                "template_color_copy_red_dye", "template_lore_copy"), book);
+        assertEquals(keys("template_color_red_dye", "template_color_blue_dye", "template_glint", "template_lore",
+                "template_color_copy", "template_lore_copy"), book);
+        var unlocks = unlocks(player);
+        assertEquals(2, unlocks.size());
+        assertEquals(2, unlocks.getLast().size());
+
+        // A newly held dye unlocks its own entry; the shared Copy entry is already known.
+        when(inventory.getContents()).thenReturn(new ItemStack[] {paper, green, ink});
+        inventoryChange(player, green);
+        assertEquals(keys("template_color_red_dye", "template_color_blue_dye", "template_color_green_dye",
+                "template_glint", "template_lore", "template_color_copy", "template_lore_copy"), book);
+        unlocks = unlocks(player);
+        assertEquals(3, unlocks.size());
+        assertEquals(keys("template_color_green_dye"), Set.copyOf(unlocks.getLast()));
+    }
+
+    private static List<Collection<?>> unlocks(Player player) {
+        return mockingDetails(player).getInvocations().stream()
+                .filter(call -> call.getMethod().getName().equals("discoverRecipes"))
+                .<Collection<?>>map(call -> call.getArgument(0)).toList();
     }
 
     @Test
@@ -216,6 +254,7 @@ class RecipeRegistryTest {
         Player player = mock(Player.class);
         var book = recipeBook(player);
         var inventory = inventory(player);
+        ItemStack boneMeal = stack(Material.BONE_MEAL);
         ItemStack ink = stack(Material.INK_SAC);
         ItemMeta meta = mock(ItemMeta.class);
         when(tag.getItemMeta()).thenReturn(meta);
@@ -227,6 +266,10 @@ class RecipeRegistryTest {
         when(meta.hasCustomName()).thenReturn(false);
         inventoryChange(player, tag);
         assertEquals(keys("nametag_copy"), book);
+
+        when(inventory.getContents()).thenReturn(new ItemStack[] {tag, boneMeal});
+        inventoryChange(player, boneMeal);
+        assertEquals(keys("nametag_copy", "nametag_reset"), book);
     }
 
     @Test

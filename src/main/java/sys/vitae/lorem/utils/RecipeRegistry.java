@@ -37,8 +37,8 @@ public final class RecipeRegistry implements Listener {
     private static final List<Material> NUGGETS = List.of(
         Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.COPPER_NUGGET
     );
-    private static final List<@NonNull Material> DYES = Arrays.stream(DyeColor.values())
-            .map(dye -> Material.valueOf(dye.name() + "_DYE")).toList();
+    private static final List<Material> DYES = Arrays.stream(DyeColor.values())
+            .<Material>map(dye -> Material.valueOf(dye.name() + "_DYE")).toList();
     /** Each non-regular font's ingredients; a water bottle's regular font is listed separately. */
     private static final List<List<Material>> FONT_STYLINGS = List.of(
         List.of(Material.EXPERIENCE_BOTTLE), List.of(Material.BOOK), List.of(Material.OMINOUS_BOTTLE)
@@ -55,7 +55,18 @@ public final class RecipeRegistry implements Listener {
     private static final @NonNull Component STYLING_EXAMPLE = Objects.requireNonNull(Component.text("Lorem Ipsum Docet"));
 
     /** A base recipe, unlocked by holding a sheet and any of its ingredients, and its Reset and Copy entries. */
-    private record Base(String key, List<Material> ingredients, String reset, @Nullable String copy) {}
+    private record Base(String key, List<Material> ingredients, Variants variants) {}
+
+    /** A template type's Reset and Copy entries, which several bases may share, shown with any of the ingredients. */
+    private record Variants(String group, Type type, List<Material> ingredients) {
+        String reset() {
+            return group + "_reset";
+        }
+
+        @Nullable String copy() {
+            return type.isCopyable() ? group + "_copy" : null;
+        }
+    }
 
     /** A styling entry, unlocked by holding a Name or Description template and a matching ingredient. */
     private record Styling(String key, Predicate<ItemStack> ingredient) {}
@@ -65,6 +76,7 @@ public final class RecipeRegistry implements Listener {
     private final List<ShapedRecipe> entries = new ArrayList<>();
     private final Map<String, NamespacedKey> registered = new HashMap<>();
     private final List<Base> bases = new ArrayList<>();
+    private final List<Variants> variantEntries = new ArrayList<>();
     private final List<Styling> stylings = new ArrayList<>();
     private final EnumSet<Material> triggers =
             EnumSet.of(Material.PAPER, Material.BONE_MEAL, Material.INK_SAC, Material.NAME_TAG);
@@ -75,25 +87,16 @@ public final class RecipeRegistry implements Listener {
     }
 
     public void registerAll() {
-        registerBase("template_name", "", Type.NAME,
+        registerBase("template_name", Type.NAME,
                 templates.create(Type.NAME, List.of(Component.translatable("mco.backup.entry.name", "Name"))),
                 NUGGETS, List.of(Component.translatable("mco.backup.entry.name", "Name")));
         List<@NonNull Component> lines = List.of(numbered(1), numbered(2));
-        registerBase("template_lore", "", Type.LORE, templates.create(Type.LORE, lines), List.of(Material.PAPER),
-                lines);
-        registerBase("template_glint", "", Type.GLINT, variant(Type.GLINT, Variant.PLAIN),
+        registerBase("template_lore", Type.LORE, templates.create(Type.LORE, lines), List.of(Material.PAPER), lines);
+        registerBase("template_glint", Type.GLINT, variant(Type.GLINT, Variant.PLAIN),
                 List.of(Material.GLOWSTONE_DUST), List.of());
-        for (Material material : DYES) {
-            var dye = Objects.requireNonNull(TextStyles.dye(material));
-            registerBase("template_color", suffix(material), Type.COLOR,
-                    templates.createColor(new ColorRecipe(List.of(List.of(dye.getColor())))), List.of(material),
-                    List.of());
-        }
+        registerColors();
         registerStylings();
-        register("nametag_reset", "nametag_reset", templates.createNameTag(Variant.RESET),
-                ItemStack.of(Material.NAME_TAG), new RecipeChoice.MaterialChoice(Material.BONE_MEAL), null);
-        register("nametag_copy", "nametag_copy", templates.createNameTag(Variant.COPY),
-                ItemStack.of(Material.NAME_TAG), new RecipeChoice.MaterialChoice(Material.INK_SAC), null);
+        registerVariants();
 
         var server = plugin.getServer();
         if (server.addRecipes(new ArrayList<>(entries))) {
@@ -171,17 +174,17 @@ public final class RecipeRegistry implements Listener {
         if (!reset && !copy) {
             return;
         }
-        @NonNull List<NamespacedKey> variants = new ArrayList<>();
+        @NonNull List<NamespacedKey> unlocked = new ArrayList<>();
         for (Base base : bases) {
             if (knows(player, base.key())) {
-                queueVariants(player, variants, base.reset(), base.copy(), reset, copy);
+                queueVariants(player, unlocked, base.variants().reset(), base.variants().copy(), reset, copy);
             }
         }
         if (unnamedTag) {
-            queueVariants(player, variants, "nametag_reset", "nametag_copy", reset, copy);
+            queueVariants(player, unlocked, "nametag_reset", "nametag_copy", reset, copy);
         }
-        if (!variants.isEmpty()) {
-            player.discoverRecipes(variants);
+        if (!unlocked.isEmpty()) {
+            player.discoverRecipes(unlocked);
         }
     }
 
@@ -192,7 +195,7 @@ public final class RecipeRegistry implements Listener {
 
     private void queue(Player player, List<NamespacedKey> pending, String key) {
         NamespacedKey id = registered.get(key);
-        if (id != null && !player.hasDiscoveredRecipe(id)) {
+        if (id != null && !pending.contains(id) && !player.hasDiscoveredRecipe(id)) {
             pending.add(id);
         }
     }
@@ -215,6 +218,33 @@ public final class RecipeRegistry implements Listener {
     private static @NonNull Component numbered(int number) {
         return Objects.requireNonNull(Component.translatable("potion.withAmplifier", "%s %s",
                 Component.translatable("mco.backup.entry.description", "Description"), Component.text(number)));
+    }
+
+    /**
+     * The base's example sheets are renamed to {@code names}: the first is the left sheet, a second one is a sheet
+     * ingredient. Its Reset and Copy examples are blank.
+     */
+    private void registerBase(String group, Type type, ItemStack result, List<Material> ingredients,
+            List<@NonNull Component> names) {
+        registerBase(group, group, result, ingredients, names, deferVariants(group, type, ingredients));
+    }
+
+    private void registerBase(String key, String group, ItemStack result, List<Material> ingredients,
+            List<@NonNull Component> names, Variants variants) {
+        registerTemplate(key, group, result, ingredients, null, names);
+        bases.add(new Base(key, ingredients, variants));
+        triggers.addAll(ingredients);
+    }
+
+    /** One Colors entry per dye, grouped together; they share one Reset and one Copy entry cycling through the dyes. */
+    private void registerColors() {
+        Variants variants = deferVariants("template_color", Type.COLOR, DYES);
+        for (Material material : DYES) {
+            var dye = Objects.requireNonNull(TextStyles.dye(material));
+            registerBase("template_color" + suffix(material), "template_color",
+                    templates.createColor(new ColorRecipe(List.of(List.of(dye.getColor())))), List.of(material),
+                    List.of(), variants);
+        }
     }
 
     /**
@@ -252,24 +282,33 @@ public final class RecipeRegistry implements Listener {
         stylings.add(new Styling(key, unlocks));
     }
 
+    /** Reset and Copy entries are only registered by {@link #registerVariants()}, after the bases and stylings. */
+    private Variants deferVariants(String group, Type type, List<Material> ingredients) {
+        Variants entry = new Variants(group, type, ingredients);
+        variantEntries.add(entry);
+        return entry;
+    }
+
     /**
-     * The base's example sheets are renamed to {@code names}: the first is the left sheet, a second one is a sheet
-     * ingredient. Its Reset and Copy examples are blank.
+     * Groups the entries by modifier after the bases and stylings: every Reset entry, the name tag's included, shares
+     * one group, and every Copy entry another.
      */
-    private void registerBase(String group, String suffix, Type type, ItemStack result, List<Material> ingredients,
-            List<@NonNull Component> names) {
-        String key = group + suffix;
-        String reset = group + "_reset" + suffix;
-        String copy = type.isCopyable() ? group + "_copy" + suffix : null;
-        registerTemplate(key, group, result, ingredients, null, names);
-        registerTemplate(reset, group + "_reset", variant(type, Variant.RESET), ingredients, Material.BONE_MEAL,
-                List.of());
-        if (copy != null) {
-            registerTemplate(copy, group + "_copy", variant(type, Variant.COPY), ingredients, Material.INK_SAC,
-                    List.of());
+    private void registerVariants() {
+        for (Variants entry : variantEntries) {
+            registerTemplate(entry.reset(), "reset", variant(entry.type(), Variant.RESET), entry.ingredients(),
+                    Material.BONE_MEAL, List.of());
         }
-        bases.add(new Base(key, ingredients, reset, copy));
-        triggers.addAll(ingredients);
+        register("nametag_reset", "reset", templates.createNameTag(Variant.RESET), ItemStack.of(Material.NAME_TAG),
+                new RecipeChoice.MaterialChoice(Material.BONE_MEAL), null);
+        for (Variants entry : variantEntries) {
+            String copy = entry.copy();
+            if (copy != null) {
+                registerTemplate(copy, "copy", variant(entry.type(), Variant.COPY), entry.ingredients(),
+                        Material.INK_SAC, List.of());
+            }
+        }
+        register("nametag_copy", "copy", templates.createNameTag(Variant.COPY), ItemStack.of(Material.NAME_TAG),
+                new RecipeChoice.MaterialChoice(Material.INK_SAC), null);
     }
 
     private ItemStack variant(Type type, Variant variant) {
