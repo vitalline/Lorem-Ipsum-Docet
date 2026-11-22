@@ -34,15 +34,20 @@ import sys.vitae.lorem.utils.Templates.Variant;
 
 public final class RecipeRegistry implements Listener {
 
-    private static final List<Material> NUGGETS =
-            List.of(Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.COPPER_NUGGET);
+    private static final List<Material> NUGGETS = List.of(
+        Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.COPPER_NUGGET
+    );
     private static final List<@NonNull Material> DYES = Arrays.stream(DyeColor.values())
             .map(dye -> Material.valueOf(dye.name() + "_DYE")).toList();
-    /** Each decoration's and non-regular font's ingredients; a water bottle's regular font is listed separately. */
-    private static final List<List<Material>> STYLINGS = List.of(List.of(Material.END_ROD),
-            List.of(Material.COAL, Material.CHARCOAL), List.of(Material.STRING), List.of(Material.STICK),
-            List.of(Material.FEATHER), List.of(Material.EXPERIENCE_BOTTLE), List.of(Material.BOOK),
-            List.of(Material.OMINOUS_BOTTLE));
+    /** Each non-regular font's ingredients; a water bottle's regular font is listed separately. */
+    private static final List<List<Material>> FONT_STYLINGS = List.of(
+        List.of(Material.EXPERIENCE_BOTTLE), List.of(Material.BOOK), List.of(Material.OMINOUS_BOTTLE)
+    );
+    /** Each decoration's corresponding ingredients. */
+    private static final List<List<Material>> DECORATION_STYLINGS = List.of(
+        List.of(Material.END_ROD), List.of(Material.COAL, Material.CHARCOAL),
+        List.of(Material.STRING), List.of(Material.STICK), List.of(Material.FEATHER)
+    );
     /**
      * The styling examples' name. It isn't translated: the enchanting-table and illager fonts only have glyphs for
      * ASCII letters (and spaces).
@@ -219,7 +224,7 @@ public final class RecipeRegistry implements Listener {
     private void registerStylings() {
         List<@NonNull Component> name = List.of(STYLING_EXAMPLE);
         ItemStack example = templates.create(Type.NAME, name);
-        for (List<Material> ingredients : STYLINGS) {
+        for (List<Material> ingredients : FONT_STYLINGS) {
             Material material = Objects.requireNonNull(ingredients.getFirst());
             registerStyling(suffix(material), example, name, ItemStack.of(material),
                     new RecipeChoice.MaterialChoice(ingredients), item -> ingredients.contains(item.getType()));
@@ -231,6 +236,12 @@ public final class RecipeRegistry implements Listener {
         registerStyling("_water_bottle", templates.create(Type.NAME, galactic), galactic, water, example(water),
                 TextStyles::isWaterBottle);
         triggers.add(Material.POTION);
+        for (List<Material> ingredients : DECORATION_STYLINGS) {
+            Material material = Objects.requireNonNull(ingredients.getFirst());
+            registerStyling(suffix(material), example, name, ItemStack.of(material),
+                    new RecipeChoice.MaterialChoice(ingredients), item -> ingredients.contains(item.getType()));
+            triggers.addAll(ingredients);
+        }
     }
 
     private void registerStyling(String suffix, ItemStack template, List<@NonNull Component> name,
