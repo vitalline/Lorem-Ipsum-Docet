@@ -1,10 +1,13 @@
 package sys.vitae.lorem.listeners;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 import org.bukkit.Color;
+import org.bukkit.DyeColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -28,6 +31,7 @@ import org.jspecify.annotations.Nullable;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import sys.vitae.lorem.utils.ColorRecipe;
 import sys.vitae.lorem.utils.ItemConsumption;
 import sys.vitae.lorem.utils.Templates;
@@ -178,7 +182,7 @@ public class TemplateCraftListener implements Listener {
             }
         }
 
-        if (ingredients.isEmpty() && !marked.isEmpty() && marked.stream().allMatch(this::isPlainLore)
+        if (!marked.isEmpty() && marked.stream().allMatch(this::isPlainLore)
                 && (marked.size() > 1 || sheets.stream().anyMatch(templates::isRenamedSheet))) {
             // Like the Description recipe, with each template contributing all its lines.
             List<Component> lore = new ArrayList<>();
@@ -188,11 +192,11 @@ public class TemplateCraftListener implements Listener {
                 }
                 if (templates.kind(item) != null) {
                     lore.addAll(templates.text(item));
-                } else {
+                } else if (templates.isSheet(item)) {
                     lore.add(sheetLine(item));
                 }
             }
-            return new Plan(templates.create(Type.LORE, lore), used);
+            return createText(Type.LORE, lore, ingredients, used);
         }
         if (marked.size() == 1 && !sheets.isEmpty() && ingredients.isEmpty()) {
             return new Plan(templates.copies(marked.getFirst(), sheets.size() + 1), used);
@@ -232,7 +236,7 @@ public class TemplateCraftListener implements Listener {
                 return new Plan(templates.createColor(templates.colorRecipe(template).append(dyes)), used);
             }
             if (kind.type().hasText()) {
-                List<@NonNull Component> text = style(templates.text(template), ingredients);
+                List<? extends Component> text = style(templates.text(template), ingredients);
                 return text == null ? null : new Plan(templates.withText(template, text), used);
             }
             return null;
@@ -248,22 +252,22 @@ public class TemplateCraftListener implements Listener {
             Kind kind = directVariant(sheets.size(), ingredients);
             return kind == null ? null : new Plan(templates.create(kind), used);
         }
-        if (ingredients.isEmpty()) {
-            if (sheets.stream().noneMatch(templates::isRenamedSheet)) {
-                return null;
-            }
+        if (ingredients.stream().anyMatch(TemplateCraftListener::isNugget)) {
+            // Mirrors vanilla's name tag recipe; a blank sheet is left to that recipe.
+            List<ItemStack> styling = new ArrayList<>(ingredients);
+            styling.removeIf(TemplateCraftListener::isNugget);
+            ItemStack sheet = sheets.getFirst();
+            return sheets.size() == 1 && styling.size() == ingredients.size() - 1 && templates.isRenamedSheet(sheet)
+                    ? createText(Type.NAME, List.of(sheet.getItemMeta().customName()), styling, used)
+                    : null;
+        }
+        if (sheets.stream().anyMatch(templates::isRenamedSheet)) {
+            // Without a nugget, even a single renamed sheet is a (one-line) Description.
             List<Component> lore = new ArrayList<>();
             for (ItemStack sheet : sheets) {
                 lore.add(sheetLine(sheet));
             }
-            return new Plan(templates.create(Type.LORE, lore), used);
-        }
-        if (sheets.size() == 1 && ingredients.size() == 1 && isNugget(ingredients.getFirst())) {
-            // Mirrors vanilla's name tag recipe; a blank sheet is left to that recipe.
-            ItemStack sheet = sheets.getFirst();
-            return templates.isRenamedSheet(sheet)
-                    ? new Plan(templates.create(Type.NAME, List.of(sheet.getItemMeta().customName())), used)
-                    : null;
+            return createText(Type.LORE, lore, ingredients, used);
         }
         if (sheets.size() != 1 || !templates.isBlankSheet(sheets.getFirst())) {
             return null;
@@ -396,16 +400,44 @@ public class TemplateCraftListener implements Listener {
         };
     }
 
-    /** The text styled with the ingredients (several dyes are mixed), or null if they aren't a styling. */
-    private static List<@NonNull Component> style(List<? extends Component> text, List<ItemStack> ingredients) {
-        List<Color> dyes = dyes(ingredients);
-        if (dyes != null) {
-            return color(text, new ColorRecipe(List.of(dyes)));
+    /** A plain Name or Description template with the text styled by the ingredients, if they all style text. */
+    private @Nullable Plan createText(Type type, List<? extends Component> text, List<ItemStack> ingredients,
+            List<Integer> used) {
+        List<? extends Component> styled = style(text, ingredients);
+        return styled == null ? null : new Plan(templates.create(type, styled), used);
+    }
+
+    /**
+     * The text styled with all the ingredients at once (dyes mix into one color), or null unless they all style text.
+     * Each decoration and the font may only be set by one ingredient, so the result never depends on their order.
+     */
+    private static @Nullable List<? extends Component> style(List<? extends Component> text,
+            List<ItemStack> ingredients) {
+        List<? extends Component> result = text;
+        List<Color> dyes = new ArrayList<>();
+        Set<@NonNull TextDecoration> decorations = EnumSet.noneOf(TextDecoration.class);
+        boolean font = false;
+        for (ItemStack ingredient : ingredients) {
+            DyeColor dye = TextStyles.dye(ingredient.getType());
+            if (dye != null) {
+                dyes.add(dye.getColor());
+                continue;
+            }
+            if (!TextStyles.isIngredient(ingredient)) {
+                return null;
+            }
+            TextDecoration decoration = TextStyles.decoration(ingredient.getType());
+            if (decoration == null) {
+                if (font) {
+                    return null;
+                }
+                font = true;
+            } else if (!decorations.add(decoration)) {
+                return null;
+            }
+            result = TextStyles.apply(result, ingredient, true);
         }
-        if (ingredients.size() == 1 && TextStyles.isIngredient(ingredients.getFirst())) {
-            return TextStyles.apply(text, ingredients.getFirst(), true);
-        }
-        return null;
+        return dyes.isEmpty() ? result : color(result, new ColorRecipe(List.of(dyes)));
     }
 
     private static @NonNull List<@NonNull Component> color(List<? extends Component> text, ColorRecipe recipe) {

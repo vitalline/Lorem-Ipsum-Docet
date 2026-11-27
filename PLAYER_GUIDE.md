@@ -30,9 +30,10 @@ name tags, and items that shimmer on their own, like nether stars.
 The recipe book shows example layouts: paper on the left, the template
 ingredient on the right, and any Reset or Copy modifier below the paper.
 These are references: place the ingredients yourself in any order.
-Mixed-dye recipes aren't listed. Styling entries instead show a Name template
-on the left and a decoration or font ingredient on the right; they work the
-same on Description templates (see [Name and Description text](#name-and-description-text)).
+Mixed-dye and combined styling recipes aren't listed. Styling entries instead
+show a Name template on the left and a decoration or font ingredient on the
+right; they work the same on Description templates (see
+[Name and Description text](#name-and-description-text)).
 
 Recipes unlock as you collect ingredients: holding paper and an entry's
 ingredient unlocks it, so paper alone unlocks Description, a nugget unlocks
@@ -109,12 +110,11 @@ append another dyeing step; its swatch and hex value preview the result.
 
 ### Name and Description text
 
-Craft a Name or Description template with one styling ingredient. Each
-ingredient changes only its own property across all the text. Decorations
-toggle off if already enabled everywhere; otherwise they turn on everywhere.
-Use multiple dyes together to mix a text color. A gray **Custom** line under
-the text indicates explicit formatting, to tell it apart from unformatted text
-that may look the same. The line isn't applied with the text.
+Craft a Name or Description template with one or more styling ingredients.
+Each ingredient changes only its own property across all the text, so they can
+be combined freely, in any order. Decorations toggle off if already enabled
+everywhere; otherwise they turn on everywhere. Each decoration and the font
+can only be changed by one ingredient per craft.
 
 | Ingredient | Effect |
 | --- | --- |
@@ -131,6 +131,17 @@ that may look the same. The line isn't applied with the text.
 
 Water bottles must be ordinary drinkable water, not custom-effect, splash, or
 lingering potions. The empty glass bottle remains after using one.
+
+Styling ingredients can also be added to the Name and Description recipes, so
+the template comes out already styled. For example, renamed paper + a nugget +
+dyes + a stick + a book + a feather makes a colored, underlined, Unifont,
+non-italic Name template; without the nugget, the same ingredients make a
+one-line Description. Adding them to a recipe that joins Description templates
+styles all of the joined text.
+
+A gray **Custom** line under the text indicates explicit text formatting,
+to tell it apart from unformatted text that may look the same.
+This line is not applied with the text.
 
 ### Style a sign directly
 

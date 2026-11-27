@@ -1,6 +1,8 @@
 package sys.vitae.lorem.listeners;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.*;
 import static sys.vitae.lorem.NonNullMockito.mock;
 import static sys.vitae.lorem.NonNullMockito.verify;
@@ -292,11 +294,72 @@ class TemplateCraftListenerTest {
     }
 
     @Test
-    void rejectsOtherIngredients() {
+    void rejectsOtherIngredientsAndStylingAPropertyTwice() {
         ItemStack template = template(Type.LORE, Variant.PLAIN);
         when(templates.text(template)).thenReturn(STYLED);
         assertNull(listener.plan(new ItemStack[] {template, item(Material.ENCHANTING_TABLE)}));
-        assertNull(listener.plan(new ItemStack[] {template, item(Material.RED_DYE), item(Material.COAL)}));
+        assertNull(listener.plan(new ItemStack[] {template, item(Material.RED_DYE), item(Material.ENCHANTING_TABLE)}));
+        assertNull(listener.plan(new ItemStack[] {template, item(Material.COAL), item(Material.CHARCOAL)}));
+        assertNull(listener.plan(new ItemStack[] {template, item(Material.BOOK), ingredient(Material.POTION)}));
+    }
+
+    @Test
+    void stylesTemplatesWithSeveralColorAndStyleIngredientsAtOnce() {
+        List<@NonNull Component> expected = mixedStyle(STYLED);
+        for (Type type : List.of(Type.NAME, Type.LORE)) {
+            ItemStack template = template(type, Variant.PLAIN);
+            when(templates.text(template)).thenReturn(STYLED);
+            when(templates.withText(template, expected)).thenReturn(result);
+            assertSame(result, listener.plan(grid(template, mixedIngredients())).result());
+        }
+    }
+
+    @Test
+    void stylesNewTextTemplatesInTheSameCraft() {
+        Component name = Component.text("Name");
+        ItemStack renamed = sheet(name);
+        List<@NonNull ItemStack> styling = mixedIngredients();
+
+        // With one nugget, the renamed sheet makes a Name.
+        ItemStack named = item(Material.PAPER);
+        when(templates.create(Type.NAME, mixedStyle(List.of(name)))).thenReturn(named);
+        var plan = listener.plan(grid(renamed, Stream.concat(Stream.of(item(Material.GOLD_NUGGET)), styling.stream()).toList()));
+        assertSame(named, plan.result());
+        assertEquals(List.of(0, 1, 2, 3, 4, 5, 6, 7), plan.consumed());
+        assertNull(listener.plan(new ItemStack[] {renamed, item(Material.IRON_NUGGET), item(Material.IRON_NUGGET),
+                item(Material.COAL)}));
+        assertNull(listener.plan(new ItemStack[] {sheet(null), item(Material.IRON_NUGGET), item(Material.COAL)}));
+
+        // Without one, it's a Description, like the plain recipe.
+        ItemStack described = item(Material.PAPER);
+        when(templates.create(Type.LORE, mixedStyle(List.of(name, Component.empty())))).thenReturn(described);
+        assertSame(described, listener.plan(grid(renamed,
+                Stream.concat(Stream.of(sheet(null)), styling.stream()).toList())).result());
+        ItemStack oneLine = item(Material.PAPER);
+        when(templates.create(Type.LORE, mixedStyle(List.of(name)))).thenReturn(oneLine);
+        assertSame(oneLine, listener.plan(grid(renamed, styling)).result());
+
+        // Joined Descriptions are styled as a whole.
+        ItemStack lore = template(Type.LORE, Variant.PLAIN), joined = item(Material.PAPER);
+        when(templates.text(lore)).thenReturn(STYLED);
+        when(templates.create(Type.LORE, mixedStyle(List.of(Objects.requireNonNull(STYLED.getFirst()), name)))).thenReturn(joined);
+        assertSame(joined, listener.plan(grid(lore, Stream.concat(Stream.of(renamed), styling.stream()).toList()))
+                .result());
+    }
+
+    /** Dyes, decorations and a font, in an order that differs from {@link #mixedStyle}'s. */
+    private static List<@NonNull ItemStack> mixedIngredients() {
+        return List.of(item(Material.FEATHER), item(Material.RED_DYE), item(Material.BOOK), item(Material.STICK),
+                item(Material.YELLOW_DYE), item(Material.CHARCOAL));
+    }
+
+    private static List<@NonNull Component> mixedStyle(List<@NonNull Component> text) {
+        List<@NonNull Component> styled = text;
+        for (Material material : List.of(Material.CHARCOAL, Material.STICK, Material.BOOK, Material.FEATHER)) {
+            styled = TextStyles.apply(styled, item(material), true);
+        }
+        ColorRecipe orange = new ColorRecipe(List.of(List.of(DyeColor.RED.getColor(), DyeColor.YELLOW.getColor())));
+        return TextStyles.color(styled, TextColor.color(orange.apply(null).asRGB()));
     }
 
     @Test
@@ -425,7 +488,7 @@ class TemplateCraftListenerTest {
         return item;
     }
 
-    private ItemStack sheet(Component name) {
+    private @NonNull ItemStack sheet(Component name) {
         ItemStack item = item(Material.PAPER);
         when(templates.isSheet(item)).thenReturn(true);
         when(templates.isRenamedSheet(item)).thenReturn(name != null);
