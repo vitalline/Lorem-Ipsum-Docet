@@ -436,14 +436,14 @@ public class TemplateCraftListener implements Listener {
         return recolored.equals(name) ? null : renamedTag(tag, recolored);
     }
 
-    /** One of the name tags with the new name, its formatting marker following suit. */
+    /** One of the name tags with the new name, its legend following suit. */
     private ItemStack renamedTag(ItemStack tag, Component name) {
         ItemStack result = tag.clone();
         result.setAmount(1);
         ItemMeta meta = result.getItemMeta();
+        List<Component> lore = NameTags.lore(meta);
         meta.customName(name);
-        List<Component> lore = meta.lore();
-        NameTags.setLore(meta, TextStyles.unmarked(lore == null ? List.of() : lore));
+        NameTags.setLore(meta, lore);
         result.setItemMeta(meta);
         return templates.asOrdinaryNameTag(result);
     }

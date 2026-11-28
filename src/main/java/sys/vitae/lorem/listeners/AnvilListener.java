@@ -37,7 +37,7 @@ import sys.vitae.lorem.utils.TextStyles;
  * A rename consisting solely of formatting codes replaces the leading formatting codes of the item's existing custom name.
  * Items without a custom name aren't renamed at all in that case, just like renaming an item to its current name in vanilla.
  * Plain rename text keeps the style of a uniformly formatted name.
- * Name tags get a marker line while their name is formatted (see {@link NameTags}), and a renamed name-resetting or
+ * Name tags get legend lines while their name is formatted (see {@link NameTags}), and a renamed name-resetting or
  * name-copying tag becomes an ordinary name tag.
  * Renaming a Name or Description template changes the name or whole description it applies instead, by the same
  * rules.
@@ -73,20 +73,20 @@ public class AnvilListener implements Listener {
             renameTemplate(event, input, formatting);
         } else {
             fixRename(event, input, formatting);
-            markNameTag(event);
+            markNameTag(event, input);
         }
     }
 
     /**
-     * Keeps the formatting marker of a renamed name tag in sync, also when the rename wasn't translated, and turns a
-     * renamed name-resetting or name-copying tag into an ordinary one.
+     * Keeps the legend of a renamed name tag in sync, also when the rename wasn't translated, and turns a renamed
+     * name-resetting or name-copying tag into an ordinary one.
      */
-    private void markNameTag(PrepareAnvilEvent event) {
+    private void markNameTag(PrepareAnvilEvent event, ItemStack input) {
         ItemStack result = event.getResult();
         if (result == null || result.isEmpty()) {
             return;
         }
-        ItemStack marked = templates.asOrdinaryNameTag(NameTags.withMarker(result));
+        ItemStack marked = templates.asOrdinaryNameTag(NameTags.withLegend(result, customName(input)));
         if (marked != result) {
             event.setResult(marked);
         }
@@ -218,9 +218,9 @@ public class AnvilListener implements Listener {
                 applied.setItemMeta(meta);
             }
         }
-        ItemStack out = templates.asOrdinaryNameTag(NameTags.withMarker(applied));
+        ItemStack out = templates.asOrdinaryNameTag(NameTags.withLegend(applied, customName(input)));
         if (out.isSimilar(input)) {
-            return; // e.g. a Lore reset on a name tag whose only lore is the marker
+            return; // e.g. a Lore reset on a name tag whose only lore is its legend
         }
 
         // Like a rename: 1 level per change on top of the prior-work penalty, which isn't increased, and never "Too Expensive!".

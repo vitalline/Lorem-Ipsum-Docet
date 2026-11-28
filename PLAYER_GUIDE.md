@@ -146,9 +146,10 @@ them to style its name the same way. One tag from a stack is styled at a time.
 A feather toggles italics as the name looks on a mob, where it's upright unless
 styled, so one feather makes it italic there.
 
-A gray **Custom** line under the text indicates explicit text formatting,
-to tell it apart from unformatted text that may look the same.
-This line is not applied with the text.
+If all of the text shares one color, a swatch line with its hex value shows it.
+A gray **Custom** line under the text indicates any other explicit text
+formatting, to tell it apart from unformatted text that may look the same.
+Name tags show these lines for their name. They are not applied with the text.
 
 ### Style a sign directly
 

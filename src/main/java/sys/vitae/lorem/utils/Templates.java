@@ -207,8 +207,7 @@ public final class Templates {
         ItemMeta meta = template.getItemMeta();
         meta.getPersistentDataContainer().set(colorKey, PersistentDataType.INTEGER_ARRAY, recipe.encode());
         TextColor color = TextColor.color(recipe.apply(null).asRGB());
-        meta.lore(List.of(Component.text("\u2588 ", color)
-                .append(Component.translatable("item.color", "Color: %s", Component.text(color.asHexString())))));
+        meta.lore(List.of(TextStyles.swatch(color)));
         template.setItemMeta(meta);
         return template;
     }
@@ -223,16 +222,17 @@ public final class Templates {
 
     public @NonNull List<@NonNull Component> text(ItemStack template) {
         List<Component> lore = template.getItemMeta().lore();
-        List<Component> lines = lore == null ? List.of() : TextStyles.unmarked(lore);
-        if (lines.isEmpty()) {
+        List<@NonNull Component> lines = lore == null ? List.of()
+                : Objects.requireNonNull(lore.stream().<@NonNull Component>map(Objects::requireNonNull).toList());
+        List<Component> text = TextStyles.unmarked(isName(template) ? lines.stream().map(Templates::unwrapPreview).toList() : lines);
+        if (text.isEmpty()) {
             throw new IllegalArgumentException("Text template is missing its text payload");
         }
-        List<@NonNull Component> text = Objects.requireNonNull(lines.stream().<@NonNull Component>map(Objects::requireNonNull).toList());
-        return isName(template) ? Objects.requireNonNull(text.stream().map(Templates::unwrapPreview).toList()) : text;
+        return Objects.requireNonNull(text.stream().<@NonNull Component>map(Objects::requireNonNull).toList());
     }
 
     /**
-     * Like name tags, text templates with any explicit formatting get the {@link TextStyles#CUSTOM_MARKER}.
+     * Like name tags, text templates with any explicit formatting get its {@link TextStyles#legend}.
      * Templates from before every template glinted get their glint.
      */
     public @NonNull ItemStack withText(ItemStack template, List<? extends Component> text) {
@@ -240,8 +240,7 @@ public final class Templates {
         ItemStack result = template.clone();
         result.setAmount(1);
         ItemMeta meta = result.getItemMeta();
-        meta.lore(TextStyles.marked(name ? text.stream().map(Templates::wrapPreview).toList() : text,
-                text.stream().anyMatch(TextStyles::isFormatted)));
+        meta.lore(TextStyles.marked(name ? text.stream().map(Templates::wrapPreview).toList() : text, text));
         meta.setEnchantmentGlintOverride(true);
         result.setItemMeta(meta);
         return result;
@@ -339,7 +338,7 @@ public final class Templates {
 
     /**
      * A plain template of the type holding the source's corresponding property, or null if the source has none.
-     * Custom formatting markers are not part of the description. A plain Name or Description template, or a name
+     * A name tag's legend is not part of its description. A plain Name or Description template, or a name
      * tag's name, lends its text's color, if all of the text explicitly shares one.
      */
     public @Nullable ItemStack copyFrom(Type type, ItemStack source) {
@@ -358,7 +357,7 @@ public final class Templates {
             case LORE -> {
                 List<Component> original = meta.lore();
                 List<Component> lore = original == null ? List.of()
-                        : source.getType() == Material.NAME_TAG ? TextStyles.unmarked(original) : original;
+                        : source.getType() == Material.NAME_TAG ? NameTags.lore(meta) : original;
                 yield lore.isEmpty() ? null : create(Type.LORE, lore);
             }
             case COLOR -> {

@@ -29,6 +29,13 @@ import net.kyori.adventure.text.format.TextDecoration;
 
 class TextStylesTest {
 
+    @Test
+    void swatchesAreUprightSoTheirBlockIsSquare() {
+        Component swatch = TextStyles.swatch(NamedTextColor.RED);
+        assertEquals(TextDecoration.State.FALSE, swatch.decoration(TextDecoration.ITALIC));
+        assertEquals(NamedTextColor.RED, swatch.color());
+    }
+
     @ParameterizedTest
     @EnumSource(DyeColor.class)
     void dyeReplacesColorThroughoutNestedTextWithoutLosingOtherProperties(@NonNull DyeColor dye) {

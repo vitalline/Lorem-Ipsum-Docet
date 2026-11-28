@@ -215,7 +215,8 @@ class TemplateCraftListenerTest {
         assertEquals(List.of(0, 1, 2, 3, 4, 5, 6), plan.consumed());
         verify(styled).setAmount(1);
         verify(meta).customName(expected);
-        verify(meta).lore(List.of(lore, TextStyles.CUSTOM_MARKER));
+        verify(meta).lore(List.of(lore, TextStyles.swatch(Objects.requireNonNull(expected.color())),
+                TextStyles.CUSTOM_MARKER));
         verify(styled).setItemMeta(meta);
         // On a mob, an unstyled name is upright, so one feather italicizes it.
         assertEquals(TextDecoration.State.TRUE, expected.decoration(TextDecoration.ITALIC));

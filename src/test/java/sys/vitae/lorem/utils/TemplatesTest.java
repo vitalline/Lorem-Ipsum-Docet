@@ -134,8 +134,10 @@ class TemplatesTest {
     }
 
     @Test
-    void formattedTextIsMarkedAfterItsLinesButTheMarkerIsNotPartOfTheText() {
-        @NonNull Component plain = Component.text("text"), styled = Component.text("text", NamedTextColor.WHITE);
+    void formattedTextIsFollowedByItsLegendWhichIsNotPartOfTheText() {
+        @NonNull Component plain = Component.text("text"), styled = Component.text("text").decorate(TextDecoration.BOLD);
+        @NonNull Component white = Component.text("text", NamedTextColor.WHITE);
+        @NonNull Component swatch = TextStyles.swatch(NamedTextColor.WHITE);
         for (String id : List.of("name", "lore")) {
             ItemStack template = paper(id), copy = paper(id);
             when(template.clone()).thenReturn(copy);
@@ -144,15 +146,22 @@ class TemplatesTest {
 
             templates.withText(template, List.of(plain));
             verify(meta).lore(lore.capture());
-            assertFalse(lore.getValue().contains(TextStyles.CUSTOM_MARKER));
+            assertEquals(1, lore.getValue().size());
 
-            // Text that ends like the marker is formatted too, so the marker still follows it.
-            for (List<@NonNull Component> text : List.of(List.of(plain, styled), List.of(plain, TextStyles.CUSTOM_MARKER))) {
+            // A shared color shows as its swatch, before the marker if there's other formatting. Text that ends like
+            // the legend is formatted too, so its own legend still follows it.
+            for (var entry : List.<List<List<@NonNull Component>>>of(
+                    List.of(List.of(plain, styled), List.of(TextStyles.CUSTOM_MARKER)),
+                    List.of(List.of(white, white), List.of(swatch)),
+                    List.of(List.of(white, white.decorate(TextDecoration.BOLD)), List.of(swatch, TextStyles.CUSTOM_MARKER)),
+                    List.of(List.of(plain, TextStyles.CUSTOM_MARKER), List.of(TextStyles.CUSTOM_MARKER)),
+                    List.of(List.of(plain, swatch), List.of(TextStyles.CUSTOM_MARKER)),
+                    List.of(List.of(white, swatch), List.of(swatch, TextStyles.CUSTOM_MARKER)))) {
+                List<@NonNull Component> text = entry.getFirst(), legend = entry.getLast();
                 clearInvocations(meta);
                 templates.withText(template, text);
                 verify(meta).lore(lore.capture());
-                assertEquals(text.size() + 1, lore.getValue().size());
-                assertEquals(TextStyles.CUSTOM_MARKER, lore.getValue().getLast());
+                assertEquals(legend, lore.getValue().subList(text.size(), lore.getValue().size()));
                 when(meta.lore()).thenReturn(lore.getValue());
                 assertEquals(text, templates.text(copy));
             }
@@ -235,12 +244,12 @@ class TemplatesTest {
         verify(meta).lore(List.of(text, Component.empty()));
         verify(meta, never()).customName(any());
 
-        // A name tag's lore stays followed by its formatting marker.
+        // A name tag's lore stays followed by its name's legend.
         clearInvocations(meta);
         when(input.getType()).thenReturn(Material.NAME_TAG);
         when(meta.customName()).thenReturn(Component.text("Mob", NamedTextColor.RED));
         templates.apply(input, lore);
-        verify(meta).lore(List.of(text, Component.empty(), TextStyles.CUSTOM_MARKER));
+        verify(meta).lore(List.of(text, Component.empty(), TextStyles.swatch(NamedTextColor.RED)));
     }
 
     @Test

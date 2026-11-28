@@ -90,7 +90,7 @@ copy template: glint is just on or off.
 | Copy | Direct recipe | Takes from the source item |
 | --- | --- | --- |
 | Name | One sheet of paper + any nugget + ink sac | Its custom name, including formatting |
-| Lore | Exactly two sheets of paper + ink sac | Its description; a name tag's gray `Custom` marker isn't part of it |
+| Lore | Exactly two sheets of paper + ink sac | Its description; a name tag's name legend (swatch and `Custom` lines) isn't part of it |
 | Color | One sheet of paper + one or more dyes + ink sac | Its exact dye color, or the color shared by all of a plain Name/Lore template's text |
 
 Craft a copy template with exactly one item that has the corresponding property
@@ -183,13 +183,16 @@ Explicit formatting can look exactly like the default in a tooltip, yet differ
 once applied - for example, a name in explicit white italics previews just like
 an unstyled one, but on a mob only the unstyled name shows upright. To tell them
 apart, Name and Lore templates with text that has any explicit formatting get a
-gray `Custom` line (vanilla's translated label) after their text. It only marks
-the template; it isn't part of the text the template applies, joins or is
-renamed from.
+legend after their text: a swatch line showing the text color (like a Color
+template's) if it is present and shared by all of the text, and a gray `Custom`
+line (vanilla's translated label) if it has any other explicit formatting.
+Text whose only formatting is a shared color gets just the swatch. The legend
+only marks the template; it isn't part of the text the template applies,
+joins or is renamed from.
 
-Name tags are marked the same way, after their other lore. Their marker is added
-and removed automatically when the tag is renamed, styled, or has a template
-applied to it in an anvil, and a Lore Copy template doesn't take it along.
+Name tags get the legend of their name the same way, after their other lore. It
+is updated automatically when the tag is renamed, styled, colored, or has a
+template applied to it in an anvil. A Lore Copy template doesn't take it along.
 
 Water bottles must be ordinary drinkable water, without custom potion effects;
 other potions and splash/lingering water bottles are not accepted. The empty

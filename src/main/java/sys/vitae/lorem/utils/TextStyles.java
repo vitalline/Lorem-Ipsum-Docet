@@ -3,6 +3,7 @@ package sys.vitae.lorem.utils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import org.bukkit.DyeColor;
@@ -15,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.Style;
@@ -24,14 +26,21 @@ import net.kyori.adventure.text.format.TextDecoration;
 public final class TextStyles {
 
     /**
-     * Vanilla's "Custom", styled like vanilla's own tooltip lines. It follows text with explicit formatting, as item
-     * tooltips may show it the same way as the default formatting (see {@link #marked}).
+     * Vanilla's "Custom", styled like vanilla's own tooltip lines. It ends the legend of text with explicit formatting
+     * other than a shared color, as item tooltips may show it the same way as the default formatting (see
+     * {@link #legend}).
      */
     public static final @NonNull Component CUSTOM_MARKER = Objects.requireNonNull(
             Component.translatable("generator.custom", "Custom")
                     .color(NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
 
     private TextStyles() {}
+
+    /** A block of the color and its hexadecimal value, upright so that the block is square. */
+    public static @NonNull Component swatch(TextColor color) {
+        return Objects.requireNonNull(Component.text("\u2588 ", color).decoration(TextDecoration.ITALIC, false)
+                .append(Component.translatable("item.color", "Color: %s", Component.text(color.asHexString()))));
+    }
 
     public static @Nullable DyeColor dye(Material material) {
         String name = material.name();
@@ -99,20 +108,63 @@ public final class TextStyles {
     }
 
     /**
-     * The lines followed by the marker if the text they show or describe is formatted. Lines already ending in one
-     * get another regardless, so that {@link #unmarked} always restores them.
+     * The lines telling apart explicit formatting, which tooltips may show the same way as the default: the
+     * {@link #swatch} of a color all of the text shares, followed by the {@link #CUSTOM_MARKER} if it has any other
+     * formatting.
      */
-    public static @NonNull List<Component> marked(List<? extends Component> lines, boolean formatted) {
-        List<Component> result = new ArrayList<>(lines);
-        if (formatted || endsWithMarker(lines)) {
-            result.add(CUSTOM_MARKER);
+    public static @NonNull List<Component> legend(List<? extends Component> text) {
+        List<Component> legend = new ArrayList<>();
+        TextColor color = sharedColor(text);
+        if (color != null) {
+            legend.add(swatch(color));
         }
+        if ((color == null ? text : color(text, null)).stream().anyMatch(TextStyles::isFormatted)) {
+            legend.add(CUSTOM_MARKER);
+        }
+        return legend;
+    }
+
+    /**
+     * The lines followed by the legend of the text they show or describe. Lines already ending in the marker get
+     * another even if the legend is empty, so that {@link #unmarked} always restores them.
+     */
+    public static @NonNull List<Component> marked(List<? extends Component> lines,
+            List<? extends Component> described) {
+        List<Component> result = new ArrayList<>(lines);
+        List<Component> legend = legend(described);
+        result.addAll(legend.isEmpty() && endsWithMarker(lines) ? List.of(CUSTOM_MARKER) : legend);
         return result;
     }
 
-    /** The lines without a final marker. */
-    public static @NonNull List<Component> unmarked(List<? extends Component> lines) {
-        return new ArrayList<>(endsWithMarker(lines) ? lines.subList(0, lines.size() - 1) : lines);
+    /** The text without its legend, as {@link #marked} with itself. */
+    public static @NonNull List<Component> unmarked(List<? extends Component> text) {
+        return unmarked(text, TextStyles::sharedColor);
+    }
+
+    /** The lines without the legend of the text they describe, as {@link #marked} with it. */
+    public static @NonNull List<Component> unmarked(List<? extends Component> lines,
+            List<? extends Component> described) {
+        TextColor color = sharedColor(described);
+        return unmarked(lines, _ -> color);
+    }
+
+    /**
+     * The lines without a final marker, then without a final swatch of the described text's color. Text ending like
+     * a swatch of its own color shares that color, so it is followed by a swatch of the same color and keeps the line.
+     */
+    private static @NonNull List<Component> unmarked(List<? extends Component> lines,
+            Function<List<Component>, @Nullable TextColor> describedColor) {
+        List<Component> result = new ArrayList<>(lines);
+        if (endsWithMarker(result)) {
+            result.removeLast();
+        }
+        if (!result.isEmpty() && result.getLast() instanceof TextComponent last
+                && last.color() instanceof TextColor shown
+                && describedColor.apply(result.subList(0, result.size() - 1)) instanceof TextColor color
+                && shown.value() == color.value() && swatch(shown).equals(last)) {
+            result.removeLast();
+        }
+        return result;
     }
 
     private static boolean endsWithMarker(List<? extends Component> lines) {

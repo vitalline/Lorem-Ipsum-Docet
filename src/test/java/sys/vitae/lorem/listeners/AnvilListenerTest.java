@@ -135,14 +135,14 @@ class AnvilListenerTest {
     }
 
     @Test
-    void templatesSyncTheNameTagMarkerButSkipResultsThatOnlyRestoreIt() {
+    void templatesSyncTheNameTagLegendButSkipResultsThatOnlyRestoreIt() {
         when(templates.kind(addition)).thenReturn(new Kind(Type.NAME, Variant.PLAIN));
         ItemStack applied = nameTag(Component.text("Mob", NamedTextColor.RED), null);
         when(templates.apply(input, addition)).thenReturn(applied);
 
         listener.onPrepareAnvil(event);
         ItemStack marked = applied.clone();
-        verify(marked.getItemMeta()).lore(List.of(TextStyles.CUSTOM_MARKER));
+        verify(marked.getItemMeta()).lore(List.of(TextStyles.swatch(NamedTextColor.RED)));
         verify(event).setResult(marked);
 
         clearInvocations(event, view);
