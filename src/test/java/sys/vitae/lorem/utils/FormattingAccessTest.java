@@ -25,12 +25,12 @@ class FormattingAccessTest {
     @Test
     void explicitPermissionOverridesBothDefaults() {
         Player player = mock(Player.class);
-        when(player.isPermissionSet(FormattingAccess.PERMISSION)).thenReturn(true);
-        when(player.hasPermission(FormattingAccess.PERMISSION)).thenReturn(true);
+        when(player.isPermissionSet(FormattingAccess.FORMAT_PERMISSION)).thenReturn(true);
+        when(player.hasPermission(FormattingAccess.FORMAT_PERMISSION)).thenReturn(true);
         when(player.getGameMode()).thenReturn(GameMode.SURVIVAL);
         assertTrue(FormattingAccess.canFormat(player));
 
-        when(player.hasPermission(FormattingAccess.PERMISSION)).thenReturn(false);
+        when(player.hasPermission(FormattingAccess.FORMAT_PERMISSION)).thenReturn(false);
         when(player.isOp()).thenReturn(true);
         when(player.getGameMode()).thenReturn(GameMode.CREATIVE);
         assertFalse(FormattingAccess.canFormat(player));

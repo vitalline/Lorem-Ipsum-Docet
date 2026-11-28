@@ -201,6 +201,9 @@ editing; holding Shift opens a plain-text edit instead. Players without the
 permission edit plain text. Signed books apply escape codes in their pages and
 title; fonts do not apply to book titles.
 
+If the server enables it, the same codes can also be used in chat messages.
+This is controlled by the separate `loremipsum.chat` permission.
+
 ## Placed blocks
 
 Place a block-entity item (such as a chest, barrel, shulker box, or banner) that

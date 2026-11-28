@@ -8,5 +8,8 @@ permissions:
   loremipsum.format:
     description: Use escape substitutions in item names, signs and books
     default: false
+  loremipsum.chat:
+    description: Use escape substitutions in chat messages
+    default: false
 
 

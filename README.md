@@ -285,6 +285,14 @@ operators can use substitutions; ordinary Survival players cannot. Explicit
 grants or denials override those defaults, including for Creative/operators.
 Crafted templates and ingredient-based styling do not require this permission.
 
+`loremipsum.chat` separately controls escape substitutions in chat messages.
+It is a plain permission that no one has by default (`default: false`), not
+even operators or Creative players, independent of `loremipsum.format`; grant
+it with your permissions setup. Messages without escapes are left as-is.
+Other plugins' chat formatting still applies, since substitution runs at `LOW`
+priority. Clients may mark changed messages as modified by the server, because
+of chat signing.
+
 Existing escape syntax is as follows: `\0`-`\f` and `\xRRGGBB` for colors,
 `\g`/`\h`/`\i`/`\j` for fonts, `\k`-`\o` for decorations, `\p` to reset
 decorations only, `\q` to reset color only, and `\r` to reset all formatting.
@@ -318,4 +326,4 @@ including with Escape; Escape is not a separate server-visible cancel action.
 
 Run `mvn test` for template recipes, property isolation, resets, copies, color
 replay, whole-text styling, name reset and copy tags, permission overrides,
-sign-editing regressions, and placed-block drops.
+chat formatting, sign-editing regressions, and placed-block drops.

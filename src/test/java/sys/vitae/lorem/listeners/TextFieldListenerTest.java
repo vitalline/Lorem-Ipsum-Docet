@@ -137,8 +137,8 @@ class TextFieldListenerTest {
 
     @Test
     void permissionGrantedSurvivalCanRoundTripAndChangeEscapeFormatting() {
-        when(player.isPermissionSet(FormattingAccess.PERMISSION)).thenReturn(true);
-        when(player.hasPermission(FormattingAccess.PERMISSION)).thenReturn(true);
+        when(player.isPermissionSet(FormattingAccess.FORMAT_PERMISSION)).thenReturn(true);
+        when(player.hasPermission(FormattingAccess.FORMAT_PERMISSION)).thenReturn(true);
         open(List.of(Component.text("red", NamedTextColor.RED)));
         verify(side).line(0, Component.text("\\cred"));
         SignChangeEvent event = edit("\\anew");
