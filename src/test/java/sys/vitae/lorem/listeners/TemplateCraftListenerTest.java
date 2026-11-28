@@ -198,6 +198,36 @@ class TemplateCraftListenerTest {
     }
 
     @Test
+    void stylesTheNameOfOneNamedNameTagAndMarksIt() {
+        Component name = Component.text("Mob");
+        ItemStack tag = item(Material.NAME_TAG), styled = item(Material.NAME_TAG);
+        when(tag.getItemMeta().customName()).thenReturn(name);
+        when(tag.clone()).thenReturn(styled);
+        ItemMeta meta = styled.getItemMeta();
+        Component lore = Component.text("Lore");
+        when(meta.lore()).thenReturn(List.of(lore));
+        when(templates.asOrdinaryNameTag(styled)).thenReturn(styled);
+        Component expected = Objects.requireNonNull(mixedStyle(List.of(name), false).getFirst());
+        when(meta.customName()).thenReturn(expected); // as set by the craft
+
+        var plan = listener.plan(grid(tag, mixedIngredients()));
+        assertSame(styled, plan.result());
+        assertEquals(List.of(0, 1, 2, 3, 4, 5, 6), plan.consumed());
+        verify(styled).setAmount(1);
+        verify(meta).customName(expected);
+        verify(meta).lore(List.of(lore, TextStyles.CUSTOM_MARKER));
+        verify(styled).setItemMeta(meta);
+        // On a mob, an unstyled name is upright, so one feather italicizes it.
+        assertEquals(TextDecoration.State.TRUE, expected.decoration(TextDecoration.ITALIC));
+
+        // Not with anything else, nor with an unnamed tag or several tags.
+        assertNull(listener.plan(new ItemStack[] {tag}));
+        assertNull(listener.plan(new ItemStack[] {tag, item(Material.COAL), item(Material.ENCHANTING_TABLE)}));
+        assertNull(listener.plan(new ItemStack[] {item(Material.NAME_TAG), item(Material.COAL)}));
+        assertNull(listener.plan(new ItemStack[] {tag, tag, item(Material.COAL)}));
+    }
+
+    @Test
     void colorDyeingAppendsOneGroupedStepInsteadOfFlatteningTheHistory() {
         ItemStack color = template(Type.COLOR, Variant.PLAIN);
         ColorRecipe original = new ColorRecipe(List.of(List.of(Color.RED)));
@@ -263,6 +293,32 @@ class TemplateCraftListenerTest {
             // Only plain text templates are colored.
             assertNull(listener.plan(new ItemStack[] {template(type, Variant.RESET), reset}));
         }
+    }
+
+    @Test
+    void colorAndColorResetTemplatesRecolorANamedNameTagsName() {
+        Component name = Objects.requireNonNull(STYLED.getFirst());
+        ItemStack tag = item(Material.NAME_TAG), colored = item(Material.NAME_TAG);
+        when(tag.getItemMeta().customName()).thenReturn(name);
+        when(tag.clone()).thenReturn(colored);
+        when(templates.asOrdinaryNameTag(colored)).thenReturn(colored);
+        ItemStack color = template(Type.COLOR, Variant.PLAIN), reset = template(Type.COLOR, Variant.RESET);
+        when(templates.colorRecipe(color)).thenReturn(new ColorRecipe(List.of(List.of(Color.RED))));
+
+        var plan = listener.plan(new ItemStack[] {tag, null, color});
+        assertSame(colored, plan.result());
+        assertEquals(List.of(0, 2), plan.consumed());
+        verify(colored).setAmount(1);
+        verify(colored.getItemMeta()).customName(Objects.requireNonNull(
+                TextStyles.color(List.of(name), TextColor.color(Color.RED.asRGB())).getFirst()));
+        assertSame(colored, listener.plan(new ItemStack[] {reset, tag}).result());
+        verify(colored.getItemMeta()).customName(Objects.requireNonNull(TextStyles.color(List.of(name), null).getFirst()));
+
+        // Names it wouldn't change, unnamed tags, and several tags at once are refused.
+        when(tag.getItemMeta().customName()).thenReturn(Component.text("Mob"));
+        assertNull(listener.plan(new ItemStack[] {tag, reset}));
+        assertNull(listener.plan(new ItemStack[] {item(Material.NAME_TAG), color}));
+        assertNull(listener.plan(new ItemStack[] {tag, tag, color}));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -354,9 +410,13 @@ class TemplateCraftListenerTest {
     }
 
     private static List<@NonNull Component> mixedStyle(List<@NonNull Component> text) {
+        return mixedStyle(text, true);
+    }
+
+    private static List<@NonNull Component> mixedStyle(List<@NonNull Component> text, boolean italicDefault) {
         List<@NonNull Component> styled = text;
         for (Material material : List.of(Material.CHARCOAL, Material.STICK, Material.BOOK, Material.FEATHER)) {
-            styled = TextStyles.apply(styled, item(material), true);
+            styled = TextStyles.apply(styled, item(material), italicDefault);
         }
         ColorRecipe orange = new ColorRecipe(List.of(List.of(DyeColor.RED.getColor(), DyeColor.YELLOW.getColor())));
         return TextStyles.color(styled, TextColor.color(orange.apply(null).asRGB()));

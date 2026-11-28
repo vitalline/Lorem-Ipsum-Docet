@@ -328,6 +328,25 @@ class TemplatesTest {
     }
 
     @Test
+    void colorCopyTakesTheColorOfANameTagsName() {
+        Templates spy = spy(templates);
+        ItemStack copy = mock(ItemStack.class), tag = mock(ItemStack.class);
+        ItemMeta meta = mock(ItemMeta.class);
+        when(tag.getType()).thenReturn(Material.NAME_TAG);
+        when(tag.getItemMeta()).thenReturn(meta);
+        doReturn(copy).when(spy).createColor(ColorRecipe.of(Color.fromRGB(NamedTextColor.RED.value())));
+        when(meta.customName()).thenReturn(Component.text("Mob", NamedTextColor.RED));
+        assertSame(copy, spy.copyFrom(Type.COLOR, tag));
+        when(meta.customName()).thenReturn(Component.text("Mob"));
+        assertNull(spy.copyFrom(Type.COLOR, tag));
+
+        // Only a name tag's name counts as text.
+        when(tag.getType()).thenReturn(Material.DIAMOND_SWORD);
+        when(meta.customName()).thenReturn(Component.text("Sword", NamedTextColor.RED));
+        assertNull(spy.copyFrom(Type.COLOR, tag));
+    }
+
+    @Test
     void colorReplaysStepsAgainstExistingDyeAndRejectsOtherItems() {
         ColorRecipe recipe = new ColorRecipe(List.of(List.of(Color.RED), List.of(Color.BLUE)));
         ItemStack color = paper("color");

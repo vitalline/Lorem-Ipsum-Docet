@@ -72,7 +72,8 @@ Add an **ink sac** to a Name, Description, or Colors template recipe to make a
 **Copy** template. Glowing cannot be copied. To use one, craft it with exactly
 one item that has the property you want. The source stays in the grid; the
 result is a plain template holding the copied property. A Colors Copy can also
-take the color of a Name or Description template whose text is all one color.
+take the color of a Name or Description template, or of a name tag's name,
+if the corresponding text only has one color.
 Copy templates do not work in an anvil.
 
 ### Duplicate a template
@@ -101,9 +102,10 @@ the `loremipsum.format` permission.
 Colors templates work like a complex dye: craft one with the thing to color,
 and both are used up. With leather armor, leather horse armor, or wolf armor,
 it dyes the armor, mixing with its existing color; crafting again dyes it
-again. With a Name or Description template, it sets all of that template's
-text to the template's color. A Colors Reset does the opposite, removing the
-armor's dye or the text's color. Colors templates don't work in an anvil.
+again. With a Name or Description template, or a renamed name tag, it sets all
+of that text to the template's color; one tag from a stack is colored at a
+time. A Colors Reset does the opposite, removing the armor's dye or the text's
+color. Colors templates don't work in an anvil.
 
 Put an existing Colors template and one or more dyes in the crafting grid to
 append another dyeing step; its swatch and hex value preview the result.
@@ -138,6 +140,11 @@ dyes + a stick + a book + a feather makes a colored, underlined, Unifont,
 non-italic Name template; without the nugget, the same ingredients make a
 one-line Description. Adding them to a recipe that joins Description templates
 styles all of the joined text.
+
+Styling ingredients work on a renamed name tag too: craft one named tag with
+them to style its name the same way. One tag from a stack is styled at a time.
+A feather toggles italics as the name looks on a mob, where it's upright unless
+styled, so one feather makes it italic there.
 
 A gray **Custom** line under the text indicates explicit text formatting,
 to tell it apart from unformatted text that may look the same.

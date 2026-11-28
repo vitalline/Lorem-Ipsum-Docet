@@ -34,6 +34,7 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import sys.vitae.lorem.utils.ColorRecipe;
 import sys.vitae.lorem.utils.ItemConsumption;
+import sys.vitae.lorem.utils.NameTags;
 import sys.vitae.lorem.utils.Templates;
 import sys.vitae.lorem.utils.Templates.Kind;
 import sys.vitae.lorem.utils.Templates.Type;
@@ -41,8 +42,8 @@ import sys.vitae.lorem.utils.Templates.Variant;
 import sys.vitae.lorem.utils.TextStyles;
 
 /**
- * Template composition, copying, styling, resets and copy variants in either crafting grid, and Color templates
- * (re)coloring dyeable items and text templates, like a dye.
+ * Template composition, copying, styling, resets and copy variants in either crafting grid, styling named name tags,
+ * and Color templates (re)coloring dyeable items and text templates, like a dye.
  * There is no registered recipe behind these, so taking the result is handled manually: vanilla's
  * no-recipe path would hand back the ingredients instead of consuming them.
  */
@@ -219,6 +220,9 @@ public class TemplateCraftListener implements Listener {
             }
             if (kind.type() == Type.COLOR && ingredients.size() == 1) {
                 ItemStack dyed = templates.dye(ingredients.getFirst(), template);
+                if (dyed == null) {
+                    dyed = coloredNameTag(ingredients.getFirst(), template, kind.variant());
+                }
                 if (dyed != null) {
                     return new Plan(dyed, used);
                 }
@@ -236,14 +240,18 @@ public class TemplateCraftListener implements Listener {
                 return new Plan(templates.createColor(templates.colorRecipe(template).append(dyes)), used);
             }
             if (kind.type().hasText()) {
-                List<? extends Component> text = style(templates.text(template), ingredients);
+                List<? extends Component> text = style(templates.text(template), ingredients, true);
                 return text == null ? null : new Plan(templates.withText(template, text), used);
             }
             return null;
         }
         if (marked.isEmpty() && sheets.isEmpty()) {
             Variant variant = nameTagVariant(ingredients);
-            return variant == null ? null : new Plan(templates.createNameTag(variant), used);
+            if (variant != null) {
+                return new Plan(templates.createNameTag(variant), used);
+            }
+            ItemStack styled = styledNameTag(ingredients);
+            return styled == null ? null : new Plan(styled, used);
         }
         if (!marked.isEmpty() || sheets.isEmpty()) {
             return null;
@@ -393,6 +401,53 @@ public class TemplateCraftListener implements Listener {
         return null;
     }
 
+    /**
+     * One named name tag with its name styled like a Name template's, if all the other ingredients style text. Italics
+     * toggle against a mob's upright nameplate rather than the tag's italic tooltip, since that's where the name shows.
+     */
+    private @Nullable ItemStack styledNameTag(List<ItemStack> ingredients) {
+        List<ItemStack> tags = ingredients.stream().filter(item -> item.getType() == Material.NAME_TAG).toList();
+        if (tags.size() != 1 || ingredients.size() < 2) {
+            return null;
+        }
+        ItemStack tag = tags.getFirst();
+        Component name = tag.getItemMeta().customName();
+        if (name == null) {
+            return null;
+        }
+        List<ItemStack> styling = new ArrayList<>(ingredients);
+        styling.removeIf(item -> item == tag);
+        List<? extends Component> styled = style(List.of(name), styling, false);
+        return styled == null ? null : renamedTag(tag, styled.getFirst());
+    }
+
+    /**
+     * One named name tag with its name recolored by a plain Color template or its color cleared by a Reset, like a
+     * text template's. Null if it isn't a named name tag or its name wouldn't change.
+     */
+    private @Nullable ItemStack coloredNameTag(ItemStack tag, ItemStack template, Variant variant) {
+        Component name = tag.getType() == Material.NAME_TAG ? tag.getItemMeta().customName() : null;
+        if (name == null) {
+            return null;
+        }
+        List<@NonNull Component> colored = variant == Variant.RESET
+                ? TextStyles.color(List.of(name), null) : color(List.of(name), templates.colorRecipe(template));
+        Component recolored = Objects.requireNonNull(colored.getFirst());
+        return recolored.equals(name) ? null : renamedTag(tag, recolored);
+    }
+
+    /** One of the name tags with the new name, its formatting marker following suit. */
+    private ItemStack renamedTag(ItemStack tag, Component name) {
+        ItemStack result = tag.clone();
+        result.setAmount(1);
+        ItemMeta meta = result.getItemMeta();
+        meta.customName(name);
+        List<Component> lore = meta.lore();
+        NameTags.setLore(meta, TextStyles.unmarked(lore == null ? List.of() : lore));
+        result.setItemMeta(meta);
+        return templates.asOrdinaryNameTag(result);
+    }
+
     private static boolean isNugget(ItemStack item) {
         return switch (item.getType()) {
             case IRON_NUGGET, GOLD_NUGGET, COPPER_NUGGET -> true;
@@ -403,16 +458,17 @@ public class TemplateCraftListener implements Listener {
     /** A plain Name or Description template with the text styled by the ingredients, if they all style text. */
     private @Nullable Plan createText(Type type, List<? extends Component> text, List<ItemStack> ingredients,
             List<Integer> used) {
-        List<? extends Component> styled = style(text, ingredients);
+        List<? extends Component> styled = style(text, ingredients, true);
         return styled == null ? null : new Plan(templates.create(type, styled), used);
     }
 
     /**
      * The text styled with all the ingredients at once (dyes mix into one color), or null unless they all style text.
      * Each decoration and the font may only be set by one ingredient, so the result never depends on their order.
+     * Unset italics count as the given default when toggling.
      */
     private static @Nullable List<? extends Component> style(List<? extends Component> text,
-            List<ItemStack> ingredients) {
+            List<ItemStack> ingredients, boolean italicDefault) {
         List<? extends Component> result = text;
         List<Color> dyes = new ArrayList<>();
         Set<@NonNull TextDecoration> decorations = EnumSet.noneOf(TextDecoration.class);
@@ -435,7 +491,7 @@ public class TemplateCraftListener implements Listener {
             } else if (!decorations.add(decoration)) {
                 return null;
             }
-            result = TextStyles.apply(result, ingredient, true);
+            result = TextStyles.apply(result, ingredient, italicDefault);
         }
         return dyes.isEmpty() ? result : color(result, new ColorRecipe(List.of(dyes)));
     }

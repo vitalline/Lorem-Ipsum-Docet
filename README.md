@@ -22,7 +22,7 @@ Each occupied ingredient slot contributes one item, regardless of stack size.
 | Name | One renamed sheet of paper + any nugget (iron, gold or copper) | Copies the sheet's name, including formatting, as the item's name |
 | Lore | Paper only, with at least one renamed sheet | Copies the sheets' names as description lines, in grid reading order; unrenamed sheets contribute empty lines |
 | Glint | One unrenamed sheet of paper + glowstone dust | Forces enchantment shimmer without adding enchantments |
-| Color | One unrenamed sheet of paper + one or more dyes | Crafted like a dye: dyes items supported by Paper's leather/dyeable-armor metadata, or colors a Name/Lore template's text (see [Color templates](#color-templates)) |
+| Color | One unrenamed sheet of paper + one or more dyes | Crafted like a dye: dyes items supported by Paper's leather/dyeable-armor metadata, or colors a Name/Lore template's text or a name tag's name (see [Color templates](#color-templates)) |
 
 (NB: In game, as well as in the Player Guide, Lore, Glint and Color templates
 are called Description, Glowing and Colors. For further details, see
@@ -97,9 +97,10 @@ Craft a copy template with exactly one item that has the corresponding property
 to turn it into a plain template holding that property. The source item isn't
 used up; it stays in the grid, so shift-clicking converts every copy template in
 the stack. A Color copy template can also take its color from a plain Name or
-Lore template, if all of its text has the same explicit color; that template
-stays in the grid too. A copied color is applied regardless of the target's
-dye; dyes crafted onto the Color template afterwards are applied on top of it.
+Lore template, or from a named name tag's name, if all of its text has the same
+explicit color; that template or tag stays in the grid too. A copied color is
+applied regardless of the target's dye; dyes crafted onto the Color template
+afterwards are applied on top of it.
 
 Items without the property (an unnamed item for Name, say) produce nothing.
 Any single item counts as a source, even ingredients that would otherwise
@@ -140,8 +141,11 @@ turns it into an ordinary named tag.
 
 ### Text colors, decorations, and fonts
 
-Craft a Name or Lore template with one of these ingredients. The same
-ingredients can be used on a sign's targeted side by right-clicking it.
+Craft a Name or Lore template with one or more of these ingredients, or a named
+name tag to style its name. Each decoration and the font can be changed by only
+one ingredient per craft, so the result doesn't depend on their order. The same
+ingredients can be used one at a time on a sign's targeted side by
+right-clicking it.
 
 | Ingredient | Text effect |
 | --- | --- |
@@ -159,16 +163,21 @@ ingredients can be used on a sign's targeted side by right-clicking it.
 Each operation replaces only its affected property **throughout** the text,
 including nested overrides, while retaining the other properties. Decorations
 turn off if already enabled everywhere; otherwise they turn on everywhere.
-Template names/lore have the usual italic default; signs do not.
+Template names/lore have the usual italic default; name tags and signs do not,
+since a name tag's name shows upright on a mob.
 
 Name templates preview their name in white, like an unstyled custom name,
 instead of lore's usual purple.
 
-Several dyes can be mixed in one template craft. A Name/Lore template can also
-be crafted with a Color template, which applies its preview color to all of the
+Several dyes can be mixed in one craft. Styling ingredients can also be added
+to the Name and Lore recipes, and to Lore concatenation, so the new template's
+text comes out styled; without a nugget, a renamed sheet with styling
+ingredients is a one-line Lore template. A Name/Lore template can also be
+crafted with a Color template, which applies its preview color to all of the
 text, or with a Color reset template, which clears all of the text's explicit
 color (see [Color templates](#color-templates)). Styling consumes the input
-template(s) and ingredients.
+template(s) and ingredients; a styled name tag is taken from its stack one at a
+time.
 
 Explicit formatting can look exactly like the default in a tooltip, yet differ
 once applied - for example, a name in explicit white italics previews just like
@@ -179,8 +188,8 @@ the template; it isn't part of the text the template applies, joins or is
 renamed from.
 
 Name tags are marked the same way, after their other lore. Their marker is added
-and removed automatically when the tag is renamed or a template is applied to it
-in an anvil, and a Lore Copy template doesn't take it along.
+and removed automatically when the tag is renamed, styled, or has a template
+applied to it in an anvil, and a Lore Copy template doesn't take it along.
 
 Water bottles must be ordinary drinkable water, without custom potion effects;
 other potions and splash/lingering water bottles are not accepted. The empty
@@ -204,10 +213,12 @@ template and the target, producing the recolored target.
 | --- | --- | --- |
 | One dyeable item (leather armor, leather horse armor, wolf armor) | Replays its dyeing steps on the item | Removes the item's dye |
 | A plain Name/Lore template | Sets all of its text to the preview color | Clears all of its text's explicit color |
+| One named name tag | Sets all of its name to the preview color | Clears all of its name's explicit color |
 
 Grids that wouldn't change anything (an undyed item with a reset, say) produce
-nothing, and only one item is dyed at a time. A Color copy template takes its
-color from either kind of target instead (see [Copy templates](#copy-templates)).
+nothing, and only one item is dyed at a time, even from a stack of name tags. A
+Color copy template takes its color from any of these targets instead (see
+[Copy templates](#copy-templates)).
 
 A Color template shows a colored block swatch and its hexadecimal RGB color.
 Craft it with more dyes to append another dyeing step.

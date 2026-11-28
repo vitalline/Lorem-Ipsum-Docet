@@ -339,8 +339,8 @@ public final class Templates {
 
     /**
      * A plain template of the type holding the source's corresponding property, or null if the source has none.
-     * A name tag's formatting marker isn't part of its description. A plain Name or Description template lends its
-     * text's color, if all of the text explicitly shares one.
+     * Custom formatting markers are not part of the description. A plain Name or Description template, or a name
+     * tag's name, lends its text's color, if all of the text explicitly shares one.
      */
     public @Nullable ItemStack copyFrom(Type type, ItemStack source) {
         ItemMeta meta = source.getItemMeta();
@@ -361,8 +361,14 @@ public final class Templates {
                         : source.getType() == Material.NAME_TAG ? TextStyles.unmarked(original) : original;
                 yield lore.isEmpty() ? null : create(Type.LORE, lore);
             }
-            case COLOR -> meta instanceof LeatherArmorMeta dyed && dyed.isDyed()
-                    ? createColor(ColorRecipe.of(dyed.getColor())) : null;
+            case COLOR -> {
+                if (meta instanceof LeatherArmorMeta dyed) {
+                    yield dyed.isDyed() ? createColor(ColorRecipe.of(dyed.getColor())) : null;
+                }
+                TextColor color = source.getType() == Material.NAME_TAG && meta.customName() instanceof Component name
+                        ? TextStyles.sharedColor(List.of(name)) : null;
+                yield color == null ? null : createColor(ColorRecipe.of(Objects.requireNonNull(Color.fromRGB(color.value()))));
+            }
             case GLINT -> null;
         };
     }
